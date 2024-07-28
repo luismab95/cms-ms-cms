@@ -9,11 +9,15 @@ import { OK_200 } from 'src/shared/constants/message.constants';
 import { PaginationResquestDto } from 'src/shared/interfaces/pagination.interface';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { SitieRepository } from '../sitie/repositories/sitie.repository';
+import { RedisService } from 'src/shared/redis/redis.service';
 
 @Injectable()
 export class TemplatesService {
   constructor(
     private readonly templateRepository: TemplateRepository,
+    private readonly sitieRepository: SitieRepository,
+    private readonly redisService: RedisService,
     @InjectModel('Template')
     private readonly templateModel: Model<TemplateMongoI>,
   ) {}
@@ -32,7 +36,11 @@ export class TemplatesService {
       const templateMongo = (await this.templateModel.findById(
         template.mongoId,
       )) as TemplateMongoI;
+      const draft = await this.redisService.get(
+        `template-draft-${template.id}`,
+      );
       template.data = templateMongo.data;
+      template.draft = JSON.parse(draft);
     }
     return templates;
   }
@@ -45,6 +53,8 @@ export class TemplatesService {
         HttpStatus.BAD_REQUEST,
       );
     }
+    const draft = await this.redisService.get(`template-draft-${id}`);
+    template.draft = JSON.parse(draft);
     const templateMongo = (await this.templateModel.findById(
       template.mongoId,
     )) as TemplateMongoI;
@@ -54,25 +64,47 @@ export class TemplatesService {
 
   async update(id: number, updateTemplateDto: UpdateTemplateDto) {
     const template = await this.findOne(id);
-    const updateTemplate = await this.templateModel
-      .findByIdAndUpdate(template.mongoId, updateTemplateDto, {
-        new: false,
-      })
-      .exec();
-    if (!updateTemplate) {
+    const sitie = await this.sitieRepository.find();
+
+    if (
+      updateTemplateDto.status &&
+      template.status !== updateTemplateDto.status &&
+      sitie.templateId === id
+    ) {
       throw new HttpException(
-        'No se encontro datos de la plantilla',
+        'No se puede deshabilitar la plantilla actual del sitio',
         HttpStatus.BAD_REQUEST,
       );
     }
-    delete updateTemplateDto.data;
-    await this.templateRepository.update(id, updateTemplateDto);
-    const updatedTemplate = await this.findOne(id);
-    return updatedTemplate;
+
+    if (updateTemplateDto.data) {
+      const updateTemplate = await this.templateModel
+        .findByIdAndUpdate(template.mongoId, updateTemplateDto, {
+          new: false,
+        })
+        .exec();
+      if (!updateTemplate) {
+        throw new HttpException(
+          'No se encontro datos de la plantilla',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      delete updateTemplateDto.data;
+      await this.templateRepository.update(id, updateTemplateDto);
+      await this.deleteDraft(id);
+    }
+    return await this.findOne(id);
   }
 
   async remove(id: number) {
     const template = await this.findOne(id);
+    const sitie = await this.sitieRepository.find();
+    if (sitie.templateId === id) {
+      throw new HttpException(
+        'No se puede deshabilitar la plantilla actual del sitio',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     template.status = !template.status;
     delete template.data;
     await this.templateRepository.update(
@@ -80,5 +112,20 @@ export class TemplatesService {
       template as unknown as UpdateTemplateDto,
     );
     return OK_200;
+  }
+
+  async saveDraft(id: number, updateTemplateDto: UpdateTemplateDto) {
+    await this.findOne(id);
+    await this.redisService.set(
+      `template-draft-${id}`,
+      JSON.stringify(updateTemplateDto.data),
+    );
+    return OK_200;
+  }
+
+  async deleteDraft(id: number) {
+    await this.findOne(id);
+    await this.redisService.del(`template-draft-${id}`);
+    return this.findOne(id);
   }
 }

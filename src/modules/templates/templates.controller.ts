@@ -42,6 +42,7 @@ export class TemplatesController {
   }
 
   @Get()
+  @UsePipes(new ValidationPipe())
   async findAll(
     @Query() paginationResquestDto: PaginationResquestDto,
   ): Promise<ServiceResponseInterface<PaginationResponseI<TemplateI[]>>> {
@@ -61,7 +62,23 @@ export class TemplatesController {
     };
   }
 
+  @Patch('draft/:id')
+  @UsePipes(new ValidationPipe())
+  async saveDraft(
+    @Param('id') id: string,
+    @Body() updateTemplateDto: UpdateTemplateDto,
+  ): Promise<ServiceResponseInterface<string>> {
+    return {
+      message: await this.templatesService.saveDraft(
+        Number(id),
+        updateTemplateDto,
+      ),
+      statusCode: HttpStatus.OK,
+    };
+  }
+
   @Patch(':id')
+  @UsePipes(new ValidationPipe())
   async update(
     @Param('id') id: string,
     @Body() updateTemplateDto: UpdateTemplateDto,
@@ -71,6 +88,16 @@ export class TemplatesController {
         Number(id),
         updateTemplateDto,
       ),
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @Delete('draft/:id')
+  async deleteDraft(
+    @Param('id') id: string,
+  ): Promise<ServiceResponseInterface<TemplateI>> {
+    return {
+      message: await this.templatesService.deleteDraft(Number(id)),
       statusCode: HttpStatus.OK,
     };
   }

@@ -40,6 +40,7 @@ export class UpdateTemplateDto {
   description: string;
 
   @IsObject({ message: 'Contenido debe ser un array' })
+  @IsOptional()
   data?: TemplateMongoI;
 
   @IsOptional()
@@ -54,6 +55,7 @@ export interface TemplateI {
   mongoId: string;
   status: boolean;
   data?: TemplateDataMongoI;
+  draft?: TemplateDataMongoI | null;
 }
 
 export interface TemplateNestedObjectI {

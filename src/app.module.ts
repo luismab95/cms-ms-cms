@@ -8,6 +8,7 @@ import { TemplatesModule } from './modules/templates/templates.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { config } from './shared/environments/load-env';
 import { MicrositiesModule } from './modules/microsities/microsities.module';
+import { RedisService } from './shared/redis/redis.service';
 const { mongoUri } = config.server;
 @Module({
   imports: [
@@ -19,6 +20,6 @@ const { mongoUri } = config.server;
     MicrositiesModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, RedisService],
 })
 export class AppModule {}
