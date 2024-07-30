@@ -90,9 +90,9 @@ export class TemplatesService {
         );
       }
       delete updateTemplateDto.data;
-      await this.templateRepository.update(id, updateTemplateDto);
       await this.deleteDraft(id);
     }
+    await this.templateRepository.update(id, updateTemplateDto);
     return await this.findOne(id);
   }
 
