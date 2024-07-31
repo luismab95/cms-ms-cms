@@ -10,11 +10,10 @@ import { RedisService } from 'src/shared/redis/redis.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OK_200 } from 'src/shared/constants/message.constants';
-import { SitieRepository } from '../sitie/repositories/sitie.repository';
 import { ReferenceRepository } from 'src/shared/repositories/reference.repository';
 import { LanguageRepository } from '../languages/repositories/language.repository';
-import { randomCharacters } from 'src/shared/helpers/random.helper';
 import { Database } from 'lib-database/src/shared/config/database';
+import { createPage } from 'src/shared/helpers/page.helper';
 
 @Injectable()
 export class PagesService {
@@ -22,7 +21,6 @@ export class PagesService {
     private readonly pageRepository: PageRepository,
     private readonly referenceRepository: ReferenceRepository,
     private readonly languageRepository: LanguageRepository,
-    private readonly sitieRepository: SitieRepository,
     private readonly redisService: RedisService,
     @InjectModel('Page')
     private readonly pageModel: Model<PageMongoI>,
@@ -31,62 +29,10 @@ export class PagesService {
   async create(createPageDto: CreatePageDto) {
     const dataSource = Database.getConnection();
     const createdPage = await dataSource.transaction(async (cnx) => {
-      const sitie = await this.sitieRepository.find();
       const createdPage = new this.pageModel(createPageDto);
       const pageData = await createdPage.save();
       createPageDto.mongoId = String(pageData._id);
-      createPageDto.sitieId = sitie.id;
-      const newPage = await this.pageRepository.create(createPageDto, cnx);
-
-      const languages = await this.languageRepository.get({
-        limit: 99999,
-        page: 1,
-        search: null,
-        status: true,
-      });
-
-      const aliasRef: string = randomCharacters('COMBINED', 16);
-      const descriptionRef: string = randomCharacters('COMBINED', 16);
-      const seoKeywordsRef: string = randomCharacters('COMBINED', 16);
-
-      for (let language of languages.records) {
-        await this.referenceRepository.create(
-          {
-            ref: aliasRef,
-            languageId: language.id,
-            text: '',
-          },
-          cnx,
-        );
-        await this.referenceRepository.create(
-          {
-            ref: descriptionRef,
-            languageId: language.id,
-            text: '',
-          },
-          cnx,
-        );
-        await this.referenceRepository.create(
-          {
-            ref: seoKeywordsRef,
-            languageId: language.id,
-            text: '',
-          },
-          cnx,
-        );
-      }
-
-      await this.pageRepository.createDetails(
-        {
-          aliasRef,
-          descriptionRef,
-          seoKeywordsRef,
-          pageId: newPage.id,
-        },
-        cnx,
-      );
-
-      return newPage;
+      return await createPage(createPageDto, cnx);
     });
     return this.findOne(createdPage.id);
   }

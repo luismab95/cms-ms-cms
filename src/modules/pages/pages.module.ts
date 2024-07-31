@@ -16,7 +16,6 @@ import { LanguageRepository } from '../languages/repositories/language.repositor
     PagesService,
     PageRepository,
     RedisService,
-    SitieRepository,
     ReferenceRepository,
     LanguageRepository,
   ],

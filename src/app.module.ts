@@ -10,6 +10,7 @@ import { config } from './shared/environments/load-env';
 import { MicrositiesModule } from './modules/microsities/microsities.module';
 import { RedisService } from './shared/redis/redis.service';
 import { PagesModule } from './modules/pages/pages.module';
+import { ElementsModule } from './modules/elements/elements.module';
 const { mongoUri } = config.server;
 @Module({
   imports: [
@@ -20,6 +21,7 @@ const { mongoUri } = config.server;
     MongooseModule.forRoot(`${mongoUri}`),
     MicrositiesModule,
     PagesModule,
+    ElementsModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

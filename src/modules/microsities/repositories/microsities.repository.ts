@@ -12,11 +12,14 @@ import {
   PaginationResponseI,
   PaginationResquestDto,
 } from 'src/shared/interfaces/pagination.interface';
+import { EntityManager } from 'typeorm';
 
 export class MicrosityRepository {
-  async create(microsity: CreateMicrosityDto): Promise<MicrositieI> {
+  async create(
+    microsity: CreateMicrosityDto,
+    dataSource: EntityManager,
+  ): Promise<MicrositieI> {
     try {
-      const dataSource = Database.getConnection();
       const microsityRepository = dataSource.getRepository(Micrositie);
       const newLanguage = microsityRepository.create(microsity as Micrositie);
       return await microsityRepository.save(newLanguage);

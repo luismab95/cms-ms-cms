@@ -37,6 +37,10 @@ export class CreatePageDto {
   @IsInt({ message: 'Sitio no válido' })
   @IsOptional()
   sitieId?: number;
+
+  @IsBoolean({ message: 'Estado no válido' })
+  @IsOptional()
+  isHomePage: boolean;
 }
 
 export class ReferenceUpdatePageDto {
