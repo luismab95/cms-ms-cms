@@ -4,19 +4,57 @@ import { MicrosityRepository } from './repositories/microsities.repository';
 import { OK_200 } from 'src/shared/constants/message.constants';
 import { PaginationResquestDto } from 'src/shared/interfaces/pagination.interface';
 import { stringToSlug } from 'src/shared/helpers/string.helper';
+import { Database } from 'lib-database/src/shared/config/database';
+import { InjectModel } from '@nestjs/mongoose';
+import { CreatePageDto, PageMongoI } from '../pages/dto/page.dto';
+import { Model } from 'mongoose';
+import { createPage } from 'src/shared/helpers/page.helper';
 
 @Injectable()
 export class MicrositiesService {
-  constructor(private readonly microsityRepository: MicrosityRepository) {}
+  constructor(
+    private readonly microsityRepository: MicrosityRepository,
+    @InjectModel('Page')
+    private readonly pageModel: Model<PageMongoI>,
+  ) {}
 
   async create(createMicrosityDto: CreateMicrosityDto) {
     createMicrosityDto.path = stringToSlug(createMicrosityDto.name);
-    return await this.microsityRepository.create(createMicrosityDto);
+
+    const dataSource = Database.getConnection();
+    return dataSource.transaction(async (cnx) => {
+      const newMicrositie = await this.microsityRepository.create(
+        createMicrosityDto,
+        cnx,
+      );
+
+      const createdPage = new this.pageModel({
+        data: {
+          body: {
+            css: '.body{min-height: 80vh !important}',
+            config: {
+              backgroundImage: '',
+            },
+            data: [],
+          },
+        },
+      });
+      const pageData = await createdPage.save();
+      const createPageDto = {
+        mongoId: String(pageData._id),
+        micrositieId: newMicrositie.id,
+        isHomePage: true,
+        path: 'inicio',
+        name: createMicrosityDto.name,
+      } as CreatePageDto;
+      await createPage(createPageDto, cnx);
+
+      return newMicrositie;
+    });
   }
 
   async findAll(paginationResquestDto: PaginationResquestDto) {
-    const languages = await this.microsityRepository.get(paginationResquestDto);
-    return languages;
+    return await this.microsityRepository.get(paginationResquestDto);
   }
 
   async findOne(id: number) {

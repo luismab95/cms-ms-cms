@@ -7,6 +7,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Document } from 'mongoose';
+import { SectionI } from 'src/shared/interfaces/page.interface';
 
 export class CreateTemplateDto {
   @IsString({ message: 'Nombre debe ser texto' })
@@ -20,7 +21,7 @@ export class CreateTemplateDto {
   })
   description: string;
 
-  @IsObject({ message: 'Contenido debe ser un array' })
+  @IsObject({ message: 'Contenido debe ser un objeto' })
   data?: TemplateMongoI;
 
   @IsOptional()
@@ -39,7 +40,8 @@ export class UpdateTemplateDto {
   })
   description: string;
 
-  @IsObject({ message: 'Contenido debe ser un array' })
+  @IsObject({ message: 'Contenido debe ser un objeto' })
+  @IsOptional()
   data?: TemplateMongoI;
 
   @IsOptional()
@@ -54,11 +56,12 @@ export interface TemplateI {
   mongoId: string;
   status: boolean;
   data?: TemplateDataMongoI;
+  draft?: TemplateDataMongoI | null;
 }
 
 export interface TemplateNestedObjectI {
   css: string;
-  data: any[];
+  data: SectionI[];
   config: { [key: string]: any };
 }
 

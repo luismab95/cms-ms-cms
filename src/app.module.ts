@@ -8,6 +8,9 @@ import { TemplatesModule } from './modules/templates/templates.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { config } from './shared/environments/load-env';
 import { MicrositiesModule } from './modules/microsities/microsities.module';
+import { RedisService } from './shared/redis/redis.service';
+import { PagesModule } from './modules/pages/pages.module';
+import { ElementsModule } from './modules/elements/elements.module';
 const { mongoUri } = config.server;
 @Module({
   imports: [
@@ -17,8 +20,10 @@ const { mongoUri } = config.server;
     TemplatesModule,
     MongooseModule.forRoot(`${mongoUri}`),
     MicrositiesModule,
+    PagesModule,
+    ElementsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, RedisService],
 })
 export class AppModule {}
