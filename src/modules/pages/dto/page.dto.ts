@@ -2,7 +2,6 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
-  IsEnum,
   IsInt,
   IsNotEmpty,
   IsObject,
@@ -138,4 +137,8 @@ export interface PageDataMongoI {
 
 export interface PageMongoI extends Document {
   data: PageDataMongoI;
+}
+
+export interface ElementDataI {
+  [key: string]: string;
 }

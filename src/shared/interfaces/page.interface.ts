@@ -1,9 +1,12 @@
+import { ElementDataI } from 'src/modules/pages/dto/page.dto';
+
 export interface ElementI {
   uuid: string;
   name: string;
   css: string;
   config: { [key: string]: any };
   text: { [key: string]: any };
+  dataText?: ElementDataI[];
 }
 
 export interface ColumnI {

@@ -1,7 +1,9 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import {
   CreatePageDto,
+  ElementDataI,
   GetallDto,
+  PageDataMongoI,
   PageMongoI,
   UpdatePageDto,
 } from './dto/page.dto';
@@ -14,6 +16,9 @@ import { ReferenceRepository } from 'src/shared/repositories/reference.repositor
 import { LanguageRepository } from '../languages/repositories/language.repository';
 import { Database } from 'lib-database/src/shared/config/database';
 import { createPage } from 'src/shared/helpers/page.helper';
+import { ColumnI, SectionI } from '../../shared/interfaces/page.interface';
+import { randomCharacters } from 'src/shared/helpers/random.helper';
+import { EntityManager } from 'typeorm';
 
 @Injectable()
 export class PagesService {
@@ -54,7 +59,7 @@ export class PagesService {
     const pageMongo = (await this.pageModel.findById(
       page.mongoId,
     )) as PageMongoI;
-    page.data = pageMongo.data;
+    page.data = await this.replaceRefText(pageMongo.data);
 
     const languages = await this.languageRepository.get({
       limit: 9999,
@@ -83,45 +88,54 @@ export class PagesService {
   }
 
   async update(id: number, updatePageDto: UpdatePageDto) {
-    const page = await this.findOne(id);
+    try {
+      const page = await this.findOne(id);
 
-    if (page.data) {
-      const updatePage = await this.pageModel
-        .findByIdAndUpdate(page.mongoId, updatePageDto, {
-          new: false,
-        })
-        .exec();
-      if (!updatePage) {
-        throw new HttpException(
-          'No se encontro datos de la página',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-      delete updatePageDto.data;
-      await this.deleteDraft(id);
-    }
+      if (page.data) {
+        const getRefText = await this.saveRefText(updatePageDto);
 
-    const dataSource = Database.getConnection();
-    await dataSource.transaction(async (cnx) => {
-      if (updatePageDto.detail) {
-        for (let detail of updatePageDto.detail) {
-          for (let reference of detail.references) {
-            await this.referenceRepository.update(
-              {
-                languageId: detail.lang,
-                ref: reference.ref,
-                text: reference.value,
-              },
-              cnx,
-            );
-          }
+        const updatePage = await this.pageModel
+          .findByIdAndUpdate(page.mongoId, getRefText, {
+            new: false,
+          })
+          .exec();
+        if (!updatePage) {
+          throw new HttpException(
+            'No se pudo actualizar la informaciòn de la página',
+            HttpStatus.BAD_REQUEST,
+          );
         }
-        delete updatePageDto.detail;
+        delete updatePageDto.data;
+        await this.deleteDraft(id);
       }
-      await this.pageRepository.update(id, updatePageDto, cnx);
-    });
 
-    return await this.findOne(id);
+      const dataSource = Database.getConnection();
+      await dataSource.transaction(async (cnx) => {
+        if (updatePageDto.detail) {
+          for (let detail of updatePageDto.detail) {
+            for (let reference of detail.references) {
+              await this.referenceRepository.update(
+                {
+                  languageId: detail.lang,
+                  ref: reference.ref,
+                  text: reference.value,
+                },
+                cnx,
+              );
+            }
+          }
+          delete updatePageDto.detail;
+        }
+        await this.pageRepository.update(id, updatePageDto, cnx);
+      });
+
+      return await this.findOne(id);
+    } catch (error) {
+      throw new HttpException(
+        'No se pudo actualizar la informaciòn de la página',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 
   async remove(id: number) {
@@ -149,5 +163,106 @@ export class PagesService {
     await this.findOne(id);
     await this.redisService.del(`page-draft-${id}`);
     return this.findOne(id);
+  }
+
+  async saveRefText(updatePageDto: UpdatePageDto) {
+    const dataSource = Database.getConnection();
+
+    await dataSource.transaction(async (cnx) => {
+      for (const section of updatePageDto.data.body['data']) {
+        for (const row of section.rows) {
+          for (const column of row.columns) {
+            if (!column.element?.dataText) continue;
+            const textRefs = [];
+            Object.keys(column.element.text).forEach((key) => {
+              textRefs.push(key);
+            });
+            for (const textRef of textRefs) {
+              const findReference = await this.referenceRepository.get(
+                column.element.text[textRef],
+              );
+              if (findReference.length === 0) {
+                const ref = randomCharacters('COMBINED', 16);
+                column.element.text[textRef] = ref;
+              }
+            }
+            for (const language of column.element.dataText) {
+              const updatePromises = Object.keys(language)
+                .filter((key) => key !== 'languageId')
+                .map((key) =>
+                  this.createOrUpdateRef(column, key, cnx, language),
+                );
+
+              await Promise.all(updatePromises);
+            }
+            delete column.element.dataText;
+          }
+        }
+      }
+    });
+
+    return updatePageDto;
+  }
+
+  async createOrUpdateRef(
+    column: ColumnI,
+    key: string,
+    cnx: EntityManager,
+    language: ElementDataI,
+  ) {
+    const findReferenceLanguage = await this.referenceRepository.find(
+      column.element.text[key],
+      Number(language['languageId']),
+    );
+
+    if (!findReferenceLanguage) {
+      await this.referenceRepository.create(
+        {
+          languageId: Number(language['languageId']),
+          ref: column.element.text[key],
+          text: language[key],
+        },
+        cnx,
+      );
+    } else {
+      await this.referenceRepository.update(
+        {
+          languageId: Number(language['languageId']),
+          ref: column.element.text[key],
+          text: language[key],
+        },
+        cnx,
+      );
+    }
+
+    return column;
+  }
+
+  async replaceRefText(data: PageDataMongoI) {
+    data = JSON.parse(JSON.stringify(data));
+    for (const section of data.body['data']) {
+      for (const row of section.rows) {
+        for (const column of row.columns) {
+          const textRefs = [];
+          Object.keys(column.element.text).forEach((key) => {
+            textRefs.push(key);
+          });
+          column.element.dataText = [];
+          for (const textRef of textRefs) {
+            const findReference = await this.referenceRepository.get(
+              column.element.text[textRef],
+            );
+            findReference.forEach((reference) => {
+              column.element.dataText.push({
+                languageId: reference.languageId.toString(),
+                [textRef]: reference.text,
+              });
+            });
+          }
+        }
+      }
+    }
+
+    return data;
   }
 }

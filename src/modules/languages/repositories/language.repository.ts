@@ -89,7 +89,7 @@ export class LanguageRepository {
     const total = await query.getCount();
     const records = await query
       .groupBy('l.id')
-      .orderBy('l.id', 'DESC')
+      .orderBy('l.id', 'ASC')
       .offset((paginationRequest.page - 1) * paginationRequest.limit)
       .limit(paginationRequest.limit)
       .getRawMany<LanguageI>();
