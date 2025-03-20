@@ -78,10 +78,46 @@ export class PageRepository {
         'pd.description_ref as "descriptionRef"',
         'pd.seo_keywords_ref as "seoKeywordsRef"',
       ])
-
       .from(Page, 'p')
       .innerJoin(PageDetail, 'pd', 'pd.page_id = p.id')
       .where(`p.${field} = :value`, { value });
+    return query.getRawOne<PageI>();
+  }
+
+  async findByRender(
+    code: string,
+    value: any,
+    sitieId: number,
+    micrositieId: number | null,
+  ): Promise<PageI | undefined> {
+    const dataSource = Database.getConnection();
+    const query = dataSource
+      .createQueryBuilder()
+      .select([
+        'p.id as "id"',
+        'p.name as name',
+        'p.path as path',
+        'p.mongo_id as "mongoId"',
+        'p.sitie_id as "sitieId"',
+        'p.micrositie_id as "micrositieId"',
+        'p.mode as "mode"',
+        'p.is_home_page as "isHomePage"',
+        'p.status as status',
+        'pd.alias_ref as "aliasRef"',
+        'pd.description_ref as "descriptionRef"',
+        'pd.seo_keywords_ref as "seoKeywordsRef"',
+      ])
+      .from(Page, 'p')
+      .innerJoin(PageDetail, 'pd', 'pd.page_id = p.id')
+      .where(`p.${code} = :value`, { value })
+      .andWhere(`p.sitie_id = :sitieId`, { sitieId });
+
+    if (micrositieId !== null) {
+      query.andWhere(`p.micrositie_id = :micrositieId`, { micrositieId });
+    } else {
+      query.andWhere(`p.micrositie_id IS NULL`);
+    }
+
     return query.getRawOne<PageI>();
   }
 

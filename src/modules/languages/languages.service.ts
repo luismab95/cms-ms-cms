@@ -13,6 +13,11 @@ export class LanguagesService {
     return OK_200;
   }
 
+  async getAll() {
+    const languages = await this.languageRepository.getAll();
+    return languages;
+  }
+
   async findAll(paginationResquestDto: PaginationResquestDto) {
     const languages = await this.languageRepository.get(paginationResquestDto);
     return languages;

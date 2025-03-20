@@ -35,6 +35,7 @@ export class PagesController {
   }
 
   @Get()
+  @UsePipes(new ValidationPipe())
   async findAll(
     @Query() GetallDto: GetallDto,
   ): Promise<ServiceResponseInterface<PaginationResponseI<PageI[]>>> {
@@ -62,10 +63,7 @@ export class PagesController {
     @Body() updatePageDto: UpdatePageDto,
   ): Promise<ServiceResponseInterface<string>> {
     return {
-      message: await this.pagesService.saveDraft(
-        Number(id),
-        updatePageDto,
-      ),
+      message: await this.pagesService.saveDraft(Number(id), updatePageDto),
       statusCode: HttpStatus.OK,
     };
   }
@@ -83,6 +81,7 @@ export class PagesController {
   }
 
   @Delete('draft/:id')
+  @UsePipes(new ValidationPipe())
   async deleteDraft(
     @Param('id') id: string,
   ): Promise<ServiceResponseInterface<PageI>> {
@@ -92,8 +91,8 @@ export class PagesController {
     };
   }
 
-
   @Delete(':id')
+  @UsePipes(new ValidationPipe())
   async remove(
     @Param('id') id: string,
   ): Promise<ServiceResponseInterface<string>> {

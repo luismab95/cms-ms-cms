@@ -57,8 +57,8 @@ export class MicrositiesService {
     return await this.microsityRepository.get(paginationResquestDto);
   }
 
-  async findOne(id: number) {
-    const micrositie = await this.microsityRepository.find('id', id);
+  async findOne(value: any, code: string) {
+    const micrositie = await this.microsityRepository.find(code, value);
     if (micrositie === undefined) {
       throw new HttpException(
         'No se encontro datos del micrositio',
@@ -69,13 +69,12 @@ export class MicrositiesService {
   }
 
   async update(id: number, updateMicrosityDto: UpdateMicrosityDto) {
-    await this.findOne(id);
     await this.microsityRepository.update(id, updateMicrosityDto);
-    return await this.findOne(id);
+    return await this.findOne(id, 'id');
   }
 
   async remove(id: number) {
-    const micrositie = await this.findOne(id);
+    const micrositie = await this.findOne(id, 'id');
     micrositie.status = !micrositie.status;
     await this.microsityRepository.update(
       id,

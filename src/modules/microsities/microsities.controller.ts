@@ -57,7 +57,7 @@ export class MicrositiesController {
     @Param('id') id: string,
   ): Promise<ServiceResponseInterface<MicrositieI>> {
     return {
-      message: await this.micrositiesService.findOne(Number(id)),
+      message: await this.micrositiesService.findOne(Number(id), 'id'),
       statusCode: HttpStatus.OK,
     };
   }

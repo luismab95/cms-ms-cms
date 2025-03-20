@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   IsObject,
   IsOptional,
+  isString,
   IsString,
   MaxLength,
 } from 'class-validator';
@@ -141,4 +142,18 @@ export interface PageMongoI extends Document {
 
 export interface ElementDataI {
   [key: string]: string;
+}
+
+export class GetPageParamsDto {
+  @IsString({ message: 'Idioma debe ser texto' })
+  @IsNotEmpty({ message: 'Idioma es requerido' })
+  lang: string;
+
+  @IsString({ message: 'Página debe ser texto' })
+  @IsOptional()
+  page?: string;
+
+  @IsString({ message: 'Micrositio debe ser texto' })
+  @IsOptional()
+  micrositie?: string | null;
 }

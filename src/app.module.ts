@@ -11,6 +11,7 @@ import { MicrositiesModule } from './modules/microsities/microsities.module';
 import { RedisService } from './shared/redis/redis.service';
 import { PagesModule } from './modules/pages/pages.module';
 import { ElementsModule } from './modules/elements/elements.module';
+import { PublicModule } from './modules/public/public.module';
 const { mongoUri } = config.server;
 @Module({
   imports: [
@@ -22,6 +23,7 @@ const { mongoUri } = config.server;
     MicrositiesModule,
     PagesModule,
     ElementsModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

@@ -5,7 +5,6 @@ import { PageRepository } from './repositories/page.repository';
 import { RedisService } from 'src/shared/redis/redis.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PageSchema } from './schemas/page.schema';
-import { SitieRepository } from '../sitie/repositories/sitie.repository';
 import { ReferenceRepository } from 'src/shared/repositories/reference.repository';
 import { LanguageRepository } from '../languages/repositories/language.repository';
 

@@ -4,7 +4,7 @@ import {
   LanguageI,
   UpdateLanguageDto,
 } from '../dto/language.dto';
-import { Language } from 'lib-database/src/entities/public-api';
+import { Language, Parameter } from 'lib-database/src/entities/public-api';
 import { errorQuery, queryFilter } from 'src/shared/helpers/database.helper';
 import { ColumnsEnum } from 'src/shared/enums/columns.enum';
 import { HttpException, HttpStatus } from '@nestjs/common';
@@ -101,5 +101,30 @@ export class LanguageRepository {
       page: Number(paginationRequest.page),
       totalPage,
     };
+  }
+
+  async getAll(): Promise<LanguageI[]> {
+    const dataSource = Database.getConnection();
+
+    return await dataSource
+      .createQueryBuilder()
+      .select(['l.lang as lang', 'l.icon as icon'])
+      .addSelect((qb) => {
+        return qb
+          .select('p.value')
+          .from(Parameter, 'p')
+          .where('p.code = :key', { key: 'APP_STATICS_URL' })
+          .limit(1);
+      }, 'name')
+      .from(Language, 'l')
+      .where('l.status = true')
+      .orderBy('l.id', 'ASC')
+      .getRawMany<LanguageI>()
+      .then((results) => {
+        return results.map((result) => {
+          result.icon = result.name + result.icon;
+          return result;
+        });
+      });
   }
 }
