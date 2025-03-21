@@ -88,7 +88,7 @@ export class UpdatePageDto {
 }
 
 export class GetallDto extends PaginationResquestDto {
-  @IsInt({ message: 'Micrositio no válido' })
+  @IsString({ message: 'Micrositio no válido' })
   @IsOptional()
   micrositieId?: number | null;
 }

@@ -12,11 +12,14 @@ import {
   PaginationResponseI,
   PaginationResquestDto,
 } from 'src/shared/interfaces/pagination.interface';
+import { EntityManager } from 'typeorm';
 
 export class LanguageRepository {
-  async create(language: CreateLanguageDto): Promise<LanguageI> {
+  async create(
+    language: CreateLanguageDto,
+    dataSource: EntityManager,
+  ): Promise<LanguageI> {
     try {
-      const dataSource = Database.getConnection();
       const languageRepository = dataSource.getRepository(Language);
       const newLanguage = languageRepository.create(language as Language);
       return await languageRepository.save(newLanguage);

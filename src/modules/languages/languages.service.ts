@@ -3,13 +3,37 @@ import { CreateLanguageDto, UpdateLanguageDto } from './dto/language.dto';
 import { PaginationResquestDto } from 'src/shared/interfaces/pagination.interface';
 import { LanguageRepository } from './repositories/language.repository';
 import { OK_200 } from 'src/shared/constants/message.constants';
+import { ReferenceRepository } from '../../shared/repositories/reference.repository';
+import { Database } from 'lib-database/src/shared/config/database';
 
 @Injectable()
 export class LanguagesService {
-  constructor(private readonly languageRepository: LanguageRepository) {}
+  constructor(
+    private readonly languageRepository: LanguageRepository,
+    private readonly referenceRepository: ReferenceRepository,
+  ) {}
 
   async create(createLanguageDto: CreateLanguageDto) {
-    await this.languageRepository.create(createLanguageDto);
+    const dataSource = Database.getConnection();
+
+    await dataSource.transaction(async (cnx) => {
+      const createLanguage = await this.languageRepository.create(
+        createLanguageDto,
+        cnx,
+      );
+      const references = await this.referenceRepository.getAll(cnx);
+      for (const reference of references) {
+        await this.referenceRepository.create(
+          {
+            ref: reference.ref,
+            languageId: createLanguage.id,
+            text: reference.text,
+          },
+          cnx,
+        );
+      }
+    });
+
     return OK_200;
   }
 

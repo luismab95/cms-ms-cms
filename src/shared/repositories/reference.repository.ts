@@ -70,4 +70,15 @@ export class ReferenceRepository {
       .where('r.ref = :ref', { ref });
     return await query.getRawMany<ReferenceI>();
   }
+
+  async getAll(dataSource: EntityManager): Promise<ReferenceI[]> {
+    const query = dataSource
+      .createQueryBuilder()
+      .select(['r.ref as ref', 'r.text as "text"'])
+      .from(Reference, 'r')
+      .distinctOn(['r.ref'])
+      .orderBy('r.ref', 'ASC')
+      .where('r.status = :status', { status: true });
+    return await query.getRawMany<ReferenceI>();
+  }
 }
