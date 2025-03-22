@@ -7,9 +7,14 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { PageSchema } from './schemas/page.schema';
 import { ReferenceRepository } from 'src/shared/repositories/reference.repository';
 import { LanguageRepository } from '../languages/repositories/language.repository';
+import { VisitSchema } from '../dashboard/schemas/visit.schema';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: 'Page', schema: PageSchema }])],
+  imports: [
+    MongooseModule.forFeature([{ name: 'Page', schema: PageSchema }]),
+    MongooseModule.forFeature([{ name: 'Visit', schema: VisitSchema }]),
+    MongooseModule.forFeature([{ name: 'Review', schema: PageSchema }]),
+  ],
   controllers: [PagesController],
   providers: [
     PagesService,

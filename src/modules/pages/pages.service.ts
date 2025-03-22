@@ -1,4 +1,3 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import {
   CreatePageDto,
   ElementDataI,
@@ -7,20 +6,29 @@ import {
   PageDataMongoI,
   PageI,
   PageMongoI,
+  PageReviewI,
+  ReviewPageDto,
   UpdatePageDto,
 } from './dto/page.dto';
-import { PageRepository } from './repositories/page.repository';
-import { RedisService } from 'src/shared/redis/redis.service';
+import { ColumnI } from '../../shared/interfaces/page.interface';
+import { createPage } from 'src/shared/helpers/page.helper';
+import { Database } from 'lib-database/src/shared/config/database';
+import { EntityManager } from 'typeorm';
+import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { LanguageRepository } from '../languages/repositories/language.repository';
 import { Model } from 'mongoose';
 import { OK_200 } from 'src/shared/constants/message.constants';
-import { ReferenceRepository } from 'src/shared/repositories/reference.repository';
-import { LanguageRepository } from '../languages/repositories/language.repository';
-import { Database } from 'lib-database/src/shared/config/database';
-import { createPage } from 'src/shared/helpers/page.helper';
-import { ColumnI } from '../../shared/interfaces/page.interface';
+import { PageRepository } from './repositories/page.repository';
 import { randomCharacters } from 'src/shared/helpers/random.helper';
-import { EntityManager } from 'typeorm';
+import { RedisService } from 'src/shared/redis/redis.service';
+import { ReferenceRepository } from 'src/shared/repositories/reference.repository';
+import { REQUEST } from '@nestjs/core';
+import { VisitMongoI } from '../dashboard/dto/dashboard.dto';
+import * as moment from 'moment-timezone';
+
+moment.locale('es');
+moment.tz.setDefault('America/Guayaquil');
 
 @Injectable()
 export class PagesService {
@@ -31,6 +39,11 @@ export class PagesService {
     private readonly redisService: RedisService,
     @InjectModel('Page')
     private readonly pageModel: Model<PageMongoI>,
+    @InjectModel('Review')
+    private readonly pageReviewModel: Model<PageMongoI>,
+    @InjectModel('Visit')
+    private readonly visitModel: Model<VisitMongoI>,
+    @Inject(REQUEST) private readonly request: Request,
   ) {}
 
   async create(createPageDto: CreatePageDto) {
@@ -46,6 +59,10 @@ export class PagesService {
 
   async findAll(getallDto: GetallDto) {
     return await this.pageRepository.get(getallDto);
+  }
+
+  async findAllReview(getallDto: GetallDto) {
+    return await this.pageRepository.getForReview(getallDto);
   }
 
   async findOne(id: number) {
@@ -86,33 +103,68 @@ export class PagesService {
         ),
       });
     }
+
+    const validReviewMode = await this.pageRepository.findPageReview(
+      page.id,
+      'pending',
+    );
+    page.review = !!validReviewMode ? true : false;
+
+    return page;
+  }
+
+  async findOneReview(id: number) {
+    const page = await this.pageRepository.findForReview(id);
+    if (page === undefined) {
+      throw new HttpException(
+        'No se encontro datos de la página',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const pageMongo = (await this.pageModel.findById(
+      page.mongoId,
+    )) as PageMongoI;
+    page.data = await this.replaceRefText(pageMongo.data);
+
+    const pageReviewMongo = (await this.pageReviewModel.findById(
+      page.reviewMongoId,
+    )) as PageMongoI;
+    page.dataReview = await this.replaceRefText(pageReviewMongo.data);
+
     return page;
   }
 
   async update(id: number, updatePageDto: UpdatePageDto) {
     try {
-      const page = await this.findOne(id);
-
-      if (updatePageDto.data) {
-        const getRefText = await this.saveRefText(updatePageDto);
-
-        const updatePage = await this.pageModel
-          .findByIdAndUpdate(page.mongoId, getRefText, {
-            new: false,
-          })
-          .exec();
-        if (!updatePage) {
-          throw new HttpException(
-            'No se pudo actualizar la informaciòn de la página',
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-        delete updatePageDto.data;
-        await this.deleteDraft(id);
-      }
+      await this.findOne(id);
 
       const dataSource = Database.getConnection();
       await dataSource.transaction(async (cnx) => {
+        if (updatePageDto.data) {
+          const getRefText = await this.saveRefText(updatePageDto);
+
+          const createdPageReview = new this.pageReviewModel(getRefText);
+          const pageReviewData = await createdPageReview.save();
+
+          if (!pageReviewData) {
+            throw new HttpException(
+              'No se pudo actualizar la informaciòn de la página',
+              HttpStatus.BAD_REQUEST,
+            );
+          }
+
+          delete updatePageDto.data;
+          await this.deleteDraft(id);
+          const newpageReview = {
+            pageId: id,
+            userId: this.request['userId'],
+            status: 'pending',
+            mongoId: String(pageReviewData._id),
+          } as PageReviewI;
+          await this.pageRepository.createReviewPage(newpageReview, cnx);
+        }
+
         if (updatePageDto.detail) {
           for (let detail of updatePageDto.detail) {
             for (let reference of detail.references) {
@@ -275,6 +327,8 @@ export class PagesService {
     sitieId: number,
     micrositieId: number | null,
   ) {
+    let response;
+
     const lang = await this.languageRepository.find('lang', params.lang);
     if (!lang || !lang.status) {
       throw new HttpException('Página no encontrada', HttpStatus.NOT_FOUND);
@@ -300,6 +354,15 @@ export class PagesService {
 
     if (!page || !page.status) {
       throw new HttpException('Página no encontrada', HttpStatus.NOT_FOUND);
+    }
+
+    const pageRenderRedis = await this.redisService.get(
+      `page-${page.id}-${params.lang}`,
+    );
+
+    if (pageRenderRedis) {
+      response = JSON.parse(pageRenderRedis);
+      return response;
     }
 
     const pageMongo = (await this.pageModel.findById(
@@ -329,6 +392,37 @@ export class PagesService {
         ),
       });
     }
-    return { ...page, languageId: lang.id, languageCode: lang.lang };
+
+    const path = page.micrositieId
+      ? `/${params.lang}/${params.micrositie}/${page.path}`
+      : `/${params.lang}/${page.path}`;
+
+    const createdVisitPage = new this.visitModel({
+      data: {
+        pageId: page.id,
+        name: page.name,
+        lang: params.lang,
+        micrositie: params.micrositie || null,
+        path,
+        sitieId: page.sitieId,
+        createdAt: moment().format('YYYY-MM-DD'),
+        visitAt: moment().format('YYYY-MM-DD HH:mm:ss'),
+      },
+    });
+    await createdVisitPage.save();
+
+    response = { ...page, languageId: lang.id, languageCode: lang.lang };
+
+    await this.redisService.set(
+      `page-${page.id}-${params.lang}`,
+      JSON.stringify(response),
+    );
+
+    return response;
+  }
+
+  async reviewPage(id: number, reviewPageDto: ReviewPageDto) {
+    await this.pageRepository.updateReviewPage(id, reviewPageDto);
+    return OK_200;
   }
 }

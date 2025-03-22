@@ -4,14 +4,23 @@ import {
   GetallDto,
   PageDetailI,
   PageI,
+  PageReviewDataI,
+  PageReviewI,
+  ReviewPageDto,
   UpdatePageDto,
 } from '../dto/page.dto';
-import { Page, PageDetail } from 'lib-database/src/entities/public-api';
+import {
+  Micrositie,
+  Page,
+  PageDetail,
+  PageReview,
+} from 'lib-database/src/entities/public-api';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { errorQuery, queryFilter } from 'src/shared/helpers/database.helper';
 import { ColumnsEnum } from 'src/shared/enums/columns.enum';
 import { PaginationResponseI } from 'src/shared/interfaces/pagination.interface';
 import { EntityManager } from 'typeorm';
+import { PageReviewStatus } from 'lib-database/src/entities/cms/page_review.entity';
 
 export class PageRepository {
   async create(page: CreatePageDto, dataSource: EntityManager): Promise<PageI> {
@@ -71,7 +80,6 @@ export class PageRepository {
         'p.mongo_id as "mongoId"',
         'p.sitie_id as "sitieId"',
         'p.micrositie_id as "micrositieId"',
-        'p.mode as "mode"',
         'p.is_home_page as "isHomePage"',
         'p.status as status',
         'pd.alias_ref as "aliasRef"',
@@ -100,7 +108,6 @@ export class PageRepository {
         'p.mongo_id as "mongoId"',
         'p.sitie_id as "sitieId"',
         'p.micrositie_id as "micrositieId"',
-        'p.mode as "mode"',
         'p.is_home_page as "isHomePage"',
         'p.status as status',
         'pd.alias_ref as "aliasRef"',
@@ -134,7 +141,6 @@ export class PageRepository {
         'p.mongo_id as "mongoId"',
         'p.sitie_id as "sitieId"',
         'p.micrositie_id as "micrositieId"',
-        'p.mode as "mode"',
         'p.is_home_page as "isHomePage"',
         'p.status as status',
       ])
@@ -171,5 +177,140 @@ export class PageRepository {
       page: Number(paginationRequest.page),
       totalPage,
     };
+  }
+
+  async findPageReview(
+    pageId: number,
+    status: PageReviewStatus,
+  ): Promise<PageReviewI | undefined> {
+    const dataSource = Database.getConnection();
+    const query = dataSource
+      .createQueryBuilder()
+      .select([
+        'pr.id as "id"',
+        'pr.mongo_id as "mongoId"',
+        'pr.page_id as "pageId"',
+        'pr.user_id as "userId"',
+        'pr.comment as "comment"',
+        'pr.status as "status"',
+      ])
+      .from(PageReview, 'pr')
+      .where(`pr.pageId = :pageId`, { pageId })
+      .andWhere('pr.status = :status', { status });
+
+    return query.getRawOne<PageReviewI>();
+  }
+
+  async createReviewPage(
+    reviewPage: PageReviewI,
+    dataSource: EntityManager,
+  ): Promise<PageReviewI> {
+    try {
+      const pageReviewRepository = dataSource.getRepository(PageReview);
+      const newPage = pageReviewRepository.create(reviewPage as PageReview);
+      return await pageReviewRepository.save(newPage);
+    } catch (error) {
+      const customMessage = errorQuery(error, ColumnsEnum);
+      throw new HttpException(customMessage, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async updateReviewPage(
+    id: number,
+    reviewPage: ReviewPageDto,
+  ): Promise<number> {
+    try {
+      const dataSource = Database.getConnection();
+      const update = await dataSource
+        .createQueryBuilder()
+        .update(PageReview)
+        .set({ comment: reviewPage.comment, status: reviewPage.status })
+        .where('id = :id', { id })
+        .execute();
+      return update.affected!;
+    } catch (error) {
+      const customMessage = errorQuery(error, ColumnsEnum);
+      throw new HttpException(customMessage, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async getForReview(
+    paginationRequest: GetallDto,
+  ): Promise<PaginationResponseI<PageReviewDataI[]>> {
+    const dataSource = Database.getConnection();
+    let query = dataSource
+      .createQueryBuilder()
+      .select([
+        'p.id as "id"',
+        'p.name as name',
+        'p.path as path',
+        'p.mongo_id as "mongoId"',
+        'p.sitie_id as "sitieId"',
+        'p.micrositie_id as "micrositieId"',
+        'p.is_home_page as "isHomePage"',
+        'p.status as status',
+        'pr.id as "reviewId"',
+        'pr.comment as "reviewComment"',
+        'pr.status as "reviewStatus"',
+        'pr.mongo_id as "reviewMongoId"',
+        'ms.name as "micrositieName"',
+      ])
+      .from(Page, 'p')
+      .innerJoin(PageReview, 'pr', 'pr.page_id = p.id')
+      .leftJoin(Micrositie, 'ms', 'ms.id = p.micrositie_id')
+      .where('pr.status = :status', { status: 'pending' });
+
+    query = queryFilter(
+      query,
+      'p',
+      ['name', 'path'],
+      paginationRequest.status,
+      paginationRequest.search,
+    );
+
+    const total = await query.getCount();
+    const records = await query
+      .groupBy('p.id')
+      .addGroupBy('pr.id')
+      .addGroupBy('ms.name')
+      .orderBy('p.id', 'DESC')
+      .offset((paginationRequest.page - 1) * paginationRequest.limit)
+      .limit(paginationRequest.limit)
+      .getRawMany<PageReviewDataI>();
+    const totalPage = Math.ceil(total / paginationRequest.limit);
+
+    return {
+      records,
+      total,
+      page: Number(paginationRequest.page),
+      totalPage,
+    };
+  }
+
+  async findForReview(id: number): Promise<PageReviewDataI> {
+    const dataSource = Database.getConnection();
+    return await dataSource
+      .createQueryBuilder()
+      .select([
+        'p.id as "id"',
+        'p.name as name',
+        'p.path as path',
+        'p.mongo_id as "mongoId"',
+        'p.sitie_id as "sitieId"',
+        'p.micrositie_id as "micrositieId"',
+        'p.is_home_page as "isHomePage"',
+        'p.status as status',
+        'pr.id as "reviewId"',
+        'pr.comment as "reviewComment"',
+        'pr.status as "reviewStatus"',
+        'pr.mongo_id as "reviewMongoId"',
+        'ms.name as "micrositieName"',
+      ])
+      .from(Page, 'p')
+      .innerJoin(PageReview, 'pr', 'pr.page_id = p.id')
+      .leftJoin(Micrositie, 'ms', 'ms.id = p.micrositie_id')
+      .where('pr.status = :status', { status: 'pending' })
+      .andWhere('p.id = :id', { id })
+      .getRawOne<PageReviewDataI>();
   }
 }

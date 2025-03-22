@@ -15,11 +15,14 @@ import { MicrosityRepository } from '../microsities/repositories/microsities.rep
 import { TemplateRepository } from '../templates/repositories/template.repository';
 import { TemplatesService } from '../templates/templates.service';
 import { TemplateSchema } from '../templates/schemas/template.schema';
+import { VisitSchema } from '../dashboard/schemas/visit.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: 'Page', schema: PageSchema }]),
     MongooseModule.forFeature([{ name: 'Template', schema: TemplateSchema }]),
+    MongooseModule.forFeature([{ name: 'Visit', schema: VisitSchema }]),
+    MongooseModule.forFeature([{ name: 'Review', schema: PageSchema }]),
   ],
   controllers: [PublicController],
   providers: [

@@ -13,7 +13,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { PagesService } from './pages.service';
-import { CreatePageDto, UpdatePageDto, GetallDto, PageI } from './dto/page.dto';
+import {
+  CreatePageDto,
+  UpdatePageDto,
+  GetallDto,
+  PageI,
+  ReviewPageDto,
+  PageReviewDataI,
+} from './dto/page.dto';
 import { JwtGuard } from 'src/guards/jwt/jwt.guard';
 import { ServiceResponseInterface } from 'src/shared/interfaces/response.interface';
 import { PaginationResponseI } from 'src/shared/interfaces/pagination.interface';
@@ -41,6 +48,28 @@ export class PagesController {
   ): Promise<ServiceResponseInterface<PaginationResponseI<PageI[]>>> {
     return {
       message: await this.pagesService.findAll(GetallDto),
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @Get('review')
+  @UsePipes(new ValidationPipe())
+  async findAllReview(
+    @Query() GetallDto: GetallDto,
+  ): Promise<ServiceResponseInterface<PaginationResponseI<PageReviewDataI[]>>> {
+    return {
+      message: await this.pagesService.findAllReview(GetallDto),
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @Get('review/:id')
+  @UsePipes(new ValidationPipe())
+  async findOneReview(
+    @Param('id') id: string,
+  ): Promise<ServiceResponseInterface<PageReviewDataI>> {
+    return {
+      message: await this.pagesService.findOneReview(Number(id)),
       statusCode: HttpStatus.OK,
     };
   }
@@ -76,6 +105,18 @@ export class PagesController {
   ): Promise<ServiceResponseInterface<PageI>> {
     return {
       message: await this.pagesService.update(Number(id), updatePageDto),
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @Patch('review/:id')
+  @UsePipes(new ValidationPipe())
+  async rejectReviewPage(
+    @Param('id') id: string,
+    @Body() ReviewPageDto: ReviewPageDto,
+  ): Promise<ServiceResponseInterface<string>> {
+    return {
+      message: await this.pagesService.reviewPage(Number(id), ReviewPageDto),
       statusCode: HttpStatus.OK,
     };
   }

@@ -12,6 +12,7 @@ import { RedisService } from './shared/redis/redis.service';
 import { PagesModule } from './modules/pages/pages.module';
 import { ElementsModule } from './modules/elements/elements.module';
 import { PublicModule } from './modules/public/public.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 const { mongoUri } = config.server;
 @Module({
   imports: [
@@ -24,6 +25,7 @@ const { mongoUri } = config.server;
     PagesModule,
     ElementsModule,
     PublicModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

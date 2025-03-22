@@ -6,11 +6,10 @@ import {
   IsNotEmpty,
   IsObject,
   IsOptional,
-  isString,
   IsString,
   MaxLength,
 } from 'class-validator';
-import { ModeEnum } from 'lib-database/src/entities/cms/page.entity';
+import { PageReviewStatus } from 'lib-database/src/entities/cms/page_review.entity';
 import { SectionI } from 'src/shared/interfaces/page.interface';
 import { PaginationResquestDto } from 'src/shared/interfaces/pagination.interface';
 import { ReferenceI } from 'src/shared/interfaces/reference.interface';
@@ -108,7 +107,6 @@ export interface PageI {
   isHomePage: boolean;
   sitieId: number;
   micrositieId: number | null;
-  mode: ModeEnum;
   status: boolean;
   data?: PageDataMongoI;
   draft?: PageDataMongoI;
@@ -116,6 +114,7 @@ export interface PageI {
   aliasRef?: string;
   descriptionRef?: string;
   seoKeywordsRef?: string;
+  review?: boolean;
 }
 
 export interface PageDetailI {
@@ -156,4 +155,32 @@ export class GetPageParamsDto {
   @IsString({ message: 'Micrositio debe ser texto' })
   @IsOptional()
   micrositie?: string | null;
+}
+
+export interface PageReviewI {
+  id: number;
+  pageId: number;
+  userId: number;
+  status: PageReviewStatus;
+  mongoId: string;
+  comment: string;
+}
+
+export interface PageReviewDataI extends PageI {
+  reviewId: number;
+  reviewComment: string;
+  reviewStatus: PageReviewStatus;
+  reviewMongoId: string;
+  micrositieName: string;
+  dataReview?: PageDataMongoI;
+}
+
+export class ReviewPageDto {
+  @IsString({ message: 'Comentario debe ser texto' })
+  @IsNotEmpty({ message: 'Comentario es requerido' })
+  comment: string;
+
+  @IsString({ message: 'Estado debe ser texto' })
+  @IsNotEmpty({ message: 'Estado es requerido' })
+  status: PageReviewStatus;
 }
