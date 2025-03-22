@@ -97,18 +97,6 @@ export class PagesController {
     };
   }
 
-  @Patch(':id')
-  @UsePipes(new ValidationPipe())
-  async update(
-    @Param('id') id: string,
-    @Body() updatePageDto: UpdatePageDto,
-  ): Promise<ServiceResponseInterface<PageI>> {
-    return {
-      message: await this.pagesService.update(Number(id), updatePageDto),
-      statusCode: HttpStatus.OK,
-    };
-  }
-
   @Patch('review/:id')
   @UsePipes(new ValidationPipe())
   async rejectReviewPage(
@@ -117,6 +105,18 @@ export class PagesController {
   ): Promise<ServiceResponseInterface<string>> {
     return {
       message: await this.pagesService.reviewPage(Number(id), ReviewPageDto),
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @Patch(':id')
+  @UsePipes(new ValidationPipe())
+  async update(
+    @Param('id') id: string,
+    @Body() updatePageDto: UpdatePageDto,
+  ): Promise<ServiceResponseInterface<PageI>> {
+    return {
+      message: await this.pagesService.update(Number(id), updatePageDto),
       statusCode: HttpStatus.OK,
     };
   }

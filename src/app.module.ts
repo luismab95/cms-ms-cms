@@ -13,19 +13,21 @@ import { PagesModule } from './modules/pages/pages.module';
 import { ElementsModule } from './modules/elements/elements.module';
 import { PublicModule } from './modules/public/public.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { NotifyModule } from './modules/notify/notify.module';
 const { mongoUri } = config.server;
 @Module({
   imports: [
+    MongooseModule.forRoot(`${mongoUri}`),
     FilesModule,
+    MicrositiesModule,
     SitieModule,
     LanguagesModule,
     TemplatesModule,
-    MongooseModule.forRoot(`${mongoUri}`),
-    MicrositiesModule,
     PagesModule,
     ElementsModule,
     PublicModule,
     DashboardModule,
+    NotifyModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

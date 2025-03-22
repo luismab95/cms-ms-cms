@@ -26,6 +26,11 @@ import { ReferenceRepository } from 'src/shared/repositories/reference.repositor
 import { REQUEST } from '@nestjs/core';
 import { VisitMongoI } from '../dashboard/dto/dashboard.dto';
 import * as moment from 'moment-timezone';
+import { NotifyRepository } from 'src/modules/notify/repositories/notify.repository';
+import { NotifyI } from 'src/modules/notify/dto/notify.dto';
+import { RolesIdEnum } from 'src/shared/enums/roles.enum';
+import path from 'path';
+import { read } from 'fs';
 
 moment.locale('es');
 moment.tz.setDefault('America/Guayaquil');
@@ -36,6 +41,7 @@ export class PagesService {
     private readonly pageRepository: PageRepository,
     private readonly referenceRepository: ReferenceRepository,
     private readonly languageRepository: LanguageRepository,
+    private readonly notifyRepository: NotifyRepository,
     private readonly redisService: RedisService,
     @InjectModel('Page')
     private readonly pageModel: Model<PageMongoI>,
@@ -108,7 +114,22 @@ export class PagesService {
       page.id,
       'pending',
     );
+    const validLastChangeReject = await this.pageRepository.findLastPageReview(
+      page.id,
+    );
+
     page.review = !!validReviewMode ? true : false;
+    page.lastChangeReject = !validLastChangeReject
+      ? false
+      : validLastChangeReject.status === 'rejected';
+
+    if (page.lastChangeReject) {
+      const pageReviewMongo = (await this.pageReviewModel.findById(
+        validLastChangeReject.mongoId,
+      )) as PageMongoI;
+      page.dataReview = await this.replaceRefText(pageReviewMongo.data);
+      page.commentReject = validLastChangeReject.comment;
+    }
 
     return page;
   }
@@ -137,7 +158,7 @@ export class PagesService {
 
   async update(id: number, updatePageDto: UpdatePageDto) {
     try {
-      await this.findOne(id);
+      const page = await this.findOne(id);
 
       const dataSource = Database.getConnection();
       await dataSource.transaction(async (cnx) => {
@@ -163,6 +184,18 @@ export class PagesService {
             mongoId: String(pageReviewData._id),
           } as PageReviewI;
           await this.pageRepository.createReviewPage(newpageReview, cnx);
+
+          const rolesByNotify: number[] = [RolesIdEnum.review];
+          for (let role of rolesByNotify) {
+            await this.createNotify({
+              message: `Los página <strong>${page.name}</strong> tiene cambios pendientes por <em>revisar</em>.`,
+              path: `admin/modules/review-pages/detail`,
+              roleId: role,
+              metadata: {
+                id: page.id,
+              },
+            } as unknown as NotifyI);
+          }
         }
 
         if (updatePageDto.detail) {
@@ -423,6 +456,69 @@ export class PagesService {
 
   async reviewPage(id: number, reviewPageDto: ReviewPageDto) {
     await this.pageRepository.updateReviewPage(id, reviewPageDto);
+    const pageReview = await this.pageRepository.findReview(id);
+
+    const rolesByNotify: number[] = [
+      RolesIdEnum.design,
+      RolesIdEnum.editor,
+      RolesIdEnum.admin,
+    ];
+
+    if (reviewPageDto.status === 'approved') {
+      const contentPage = await this.pageReviewModel.findById(
+        pageReview.reviewMongoId,
+      );
+
+      await this.pageModel.findByIdAndUpdate(
+        pageReview.mongoId,
+        { data: contentPage.data },
+        { new: true },
+      );
+
+      const languages = await this.languageRepository.get({
+        limit: 9999,
+        page: 1,
+        status: true,
+        search: null,
+      });
+      for (let lang of languages.records) {
+        await this.redisService.del(`page-${pageReview.id}-${lang.lang}`);
+      }
+
+      for (let role of rolesByNotify) {
+        await this.createNotify({
+          message: `Los cambios en la página <strong>${pageReview.name}</strong> han sido <em>aprobados</em>.`,
+          path: `admin/modules/pages/detail`,
+          roleId: role,
+          metadata: {
+            id: pageReview.id,
+            micrositieId: pageReview.micrositieId,
+          },
+        } as unknown as NotifyI);
+      }
+    } else {
+      for (let role of rolesByNotify) {
+        await this.createNotify({
+          message: `Los cambios en la página <strong>${pageReview.name}</strong> han sido <em>rechazados</em>.`,
+          path: `admin/modules/pages/detail`,
+          roleId: role,
+          metadata: {
+            id: pageReview.id,
+            micrositieId: pageReview.micrositieId,
+          },
+        } as unknown as NotifyI);
+      }
+    }
     return OK_200;
+  }
+
+  async createNotify(notify: NotifyI) {
+    await this.notifyRepository.create({
+      message: notify.message,
+      path: notify.path,
+      roleId: notify.roleId,
+      metadata: notify.metadata,
+      readStatus: false,
+    } as unknown as NotifyI);
   }
 }

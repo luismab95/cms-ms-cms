@@ -196,7 +196,27 @@ export class PageRepository {
       ])
       .from(PageReview, 'pr')
       .where(`pr.pageId = :pageId`, { pageId })
-      .andWhere('pr.status = :status', { status });
+      .andWhere('pr.status = :status', { status })
+      .orderBy('pr.id', 'DESC');
+
+    return query.getRawOne<PageReviewI>();
+  }
+
+  async findLastPageReview(pageId: number): Promise<PageReviewI | undefined> {
+    const dataSource = Database.getConnection();
+    const query = dataSource
+      .createQueryBuilder()
+      .select([
+        'pr.id as "id"',
+        'pr.mongo_id as "mongoId"',
+        'pr.page_id as "pageId"',
+        'pr.user_id as "userId"',
+        'pr.comment as "comment"',
+        'pr.status as "status"',
+      ])
+      .from(PageReview, 'pr')
+      .where(`pr.pageId = :pageId`, { pageId })
+      .orderBy('pr.id', 'DESC');
 
     return query.getRawOne<PageReviewI>();
   }
@@ -257,8 +277,7 @@ export class PageRepository {
       ])
       .from(Page, 'p')
       .innerJoin(PageReview, 'pr', 'pr.page_id = p.id')
-      .leftJoin(Micrositie, 'ms', 'ms.id = p.micrositie_id')
-      .where('pr.status = :status', { status: 'pending' });
+      .leftJoin(Micrositie, 'ms', 'ms.id = p.micrositie_id');
 
     query = queryFilter(
       query,
@@ -267,6 +286,8 @@ export class PageRepository {
       paginationRequest.status,
       paginationRequest.search,
     );
+
+    query.andWhere('pr.status = :statusReview', { statusReview: 'pending' });
 
     const total = await query.getCount();
     const records = await query
@@ -311,6 +332,26 @@ export class PageRepository {
       .leftJoin(Micrositie, 'ms', 'ms.id = p.micrositie_id')
       .where('pr.status = :status', { status: 'pending' })
       .andWhere('p.id = :id', { id })
+      .getRawOne<PageReviewDataI>();
+  }
+
+  async findReview(id: number): Promise<PageReviewDataI> {
+    const dataSource = Database.getConnection();
+    return await dataSource
+      .createQueryBuilder()
+      .select([
+        'pr.page_id as "id"',
+        'p.mongo_id as "mongoId"',
+        'p.name as "name"',
+        'p.micrositie_id as "micrositieId"',
+        'pr.id as "reviewId"',
+        'pr.comment as "reviewComment"',
+        'pr.status as "reviewStatus"',
+        'pr.mongo_id as "reviewMongoId"',
+      ])
+      .from(PageReview, 'pr')
+      .innerJoin(Page, 'p', 'p.id = pr.page_id')
+      .where('pr.id = :id', { id })
       .getRawOne<PageReviewDataI>();
   }
 }

@@ -8,6 +8,7 @@ import { PageSchema } from './schemas/page.schema';
 import { ReferenceRepository } from 'src/shared/repositories/reference.repository';
 import { LanguageRepository } from '../languages/repositories/language.repository';
 import { VisitSchema } from '../dashboard/schemas/visit.schema';
+import { NotifyRepository } from 'src/modules/notify/repositories/notify.repository';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { VisitSchema } from '../dashboard/schemas/visit.schema';
     RedisService,
     ReferenceRepository,
     LanguageRepository,
+    NotifyRepository,
   ],
 })
 export class PagesModule {}

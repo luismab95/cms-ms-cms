@@ -109,12 +109,15 @@ export interface PageI {
   micrositieId: number | null;
   status: boolean;
   data?: PageDataMongoI;
+  dataReview?: PageDataMongoI;
   draft?: PageDataMongoI;
   details?: PageDetailReferenceI[];
   aliasRef?: string;
   descriptionRef?: string;
   seoKeywordsRef?: string;
   review?: boolean;
+  lastChangeReject?: boolean;
+  commentReject?: string;
 }
 
 export interface PageDetailI {
@@ -172,7 +175,6 @@ export interface PageReviewDataI extends PageI {
   reviewStatus: PageReviewStatus;
   reviewMongoId: string;
   micrositieName: string;
-  dataReview?: PageDataMongoI;
 }
 
 export class ReviewPageDto {

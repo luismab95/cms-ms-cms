@@ -16,6 +16,7 @@ import { TemplateRepository } from '../templates/repositories/template.repositor
 import { TemplatesService } from '../templates/templates.service';
 import { TemplateSchema } from '../templates/schemas/template.schema';
 import { VisitSchema } from '../dashboard/schemas/visit.schema';
+import { NotifyRepository } from 'src/modules/notify/repositories/notify.repository';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { VisitSchema } from '../dashboard/schemas/visit.schema';
     MicrosityRepository,
     TemplatesService,
     TemplateRepository,
+    NotifyRepository
   ],
 })
 export class PublicModule {}

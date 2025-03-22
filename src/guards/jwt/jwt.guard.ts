@@ -20,8 +20,9 @@ export class JwtGuard implements CanActivate {
       throw new HttpException(ERR_401, HttpStatus.UNAUTHORIZED);
     }
     try {
-      const payload = verifyToken(jwtToken);
+      const payload = verifyToken(jwtToken);            
       request.userId = payload['userId'];
+      request.roleId = payload['roleId'];
       return true;
     } catch (err) {
       throw new HttpException(ERR_401, HttpStatus.UNAUTHORIZED);
