@@ -9,6 +9,7 @@ import { ReferenceRepository } from 'src/shared/repositories/reference.repositor
 import { LanguageRepository } from '../languages/repositories/language.repository';
 import { VisitSchema } from '../dashboard/schemas/visit.schema';
 import { NotifyRepository } from 'src/modules/notify/repositories/notify.repository';
+import { NotifyGateway } from '../notify/notify.gateway';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { NotifyRepository } from 'src/modules/notify/repositories/notify.reposit
     ReferenceRepository,
     LanguageRepository,
     NotifyRepository,
+    NotifyGateway
   ],
 })
 export class PagesModule {}

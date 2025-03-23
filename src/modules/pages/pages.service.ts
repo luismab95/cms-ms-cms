@@ -31,6 +31,7 @@ import { NotifyI } from 'src/modules/notify/dto/notify.dto';
 import { RolesIdEnum } from 'src/shared/enums/roles.enum';
 import path from 'path';
 import { read } from 'fs';
+import { NotifyGateway } from '../notify/notify.gateway';
 
 moment.locale('es');
 moment.tz.setDefault('America/Guayaquil');
@@ -43,6 +44,7 @@ export class PagesService {
     private readonly languageRepository: LanguageRepository,
     private readonly notifyRepository: NotifyRepository,
     private readonly redisService: RedisService,
+    private readonly notifyGateway: NotifyGateway,
     @InjectModel('Page')
     private readonly pageModel: Model<PageMongoI>,
     @InjectModel('Review')
@@ -513,12 +515,14 @@ export class PagesService {
   }
 
   async createNotify(notify: NotifyI) {
-    await this.notifyRepository.create({
+    const createNotify = await this.notifyRepository.create({
       message: notify.message,
       path: notify.path,
       roleId: notify.roleId,
       metadata: notify.metadata,
       readStatus: false,
     } as unknown as NotifyI);
+
+    this.notifyGateway.sendToUser(notify.roleId.toString(), createNotify);
   }
 }
