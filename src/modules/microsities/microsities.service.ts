@@ -9,6 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { CreatePageDto, PageMongoI } from '../pages/dto/page.dto';
 import { Model } from 'mongoose';
 import { createPage } from 'src/shared/helpers/page.helper';
+import { PageRepository } from '../pages/repositories/page.repository';
 
 @Injectable()
 export class MicrositiesService {
@@ -59,6 +60,7 @@ export class MicrositiesService {
 
   async findOne(value: any, code: string) {
     const micrositie = await this.microsityRepository.find(code, value);
+    micrositie.path = `${micrositie.path}/${micrositie.pathPage}`;
     if (micrositie === undefined) {
       throw new HttpException(
         'No se encontro datos del micrositio',

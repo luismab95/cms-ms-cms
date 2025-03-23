@@ -4,4 +4,7 @@ export interface ReferenceI {
   status?: boolean;
   languageId: number;
   text: string;
+  pageId: number;
 }
+
+export interface ReferenceReviewI extends ReferenceI {}

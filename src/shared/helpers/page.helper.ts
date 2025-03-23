@@ -5,6 +5,7 @@ import { EntityManager } from 'typeorm';
 import { LanguageRepository } from 'src/modules/languages/repositories/language.repository';
 import { ReferenceRepository } from '../repositories/reference.repository';
 import { SitieRepository } from 'src/modules/sitie/repositories/sitie.repository';
+import { stringToSlug } from './string.helper';
 
 export async function createPage(
   createPageDto: CreatePageDto,
@@ -18,6 +19,7 @@ export async function createPage(
   const sitie = await sitieRepository.find();
   createPageDto.sitieId = sitie.id;
 
+  createPageDto.path = stringToSlug(createPageDto.path);
   const newPage = await pageRepository.create(createPageDto, cnx);
 
   const languages = await languageRepository.get({
@@ -37,6 +39,7 @@ export async function createPage(
         ref: aliasRef,
         languageId: language.id,
         text: '',
+        pageId: newPage.id,
       },
       cnx,
     );
@@ -45,6 +48,7 @@ export async function createPage(
         ref: descriptionRef,
         languageId: language.id,
         text: '',
+        pageId: newPage.id,
       },
       cnx,
     );
@@ -53,6 +57,7 @@ export async function createPage(
         ref: seoKeywordsRef,
         languageId: language.id,
         text: '',
+        pageId: newPage.id,
       },
       cnx,
     );

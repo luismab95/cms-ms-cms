@@ -28,6 +28,7 @@ export class LanguagesService {
             ref: reference.ref,
             languageId: createLanguage.id,
             text: reference.text,
+            pageId: reference.pageId,
           },
           cnx,
         );

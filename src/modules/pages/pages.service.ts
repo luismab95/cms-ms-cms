@@ -32,6 +32,10 @@ import { RolesIdEnum } from 'src/shared/enums/roles.enum';
 import path from 'path';
 import { read } from 'fs';
 import { NotifyGateway } from '../notify/notify.gateway';
+import {
+  ReferenceI,
+  ReferenceReviewI,
+} from 'src/shared/interfaces/reference.interface';
 
 moment.locale('es');
 moment.tz.setDefault('America/Guayaquil');
@@ -86,7 +90,7 @@ export class PagesService {
     const pageMongo = (await this.pageModel.findById(
       page.mongoId,
     )) as PageMongoI;
-    page.data = await this.replaceRefText(pageMongo.data);
+    page.data = await this.replaceRefText(pageMongo.data, 'current');
 
     const languages = await this.languageRepository.get({
       limit: 9999,
@@ -129,7 +133,10 @@ export class PagesService {
       const pageReviewMongo = (await this.pageReviewModel.findById(
         validLastChangeReject.mongoId,
       )) as PageMongoI;
-      page.dataReview = await this.replaceRefText(pageReviewMongo.data);
+      page.dataReview = await this.replaceRefText(
+        pageReviewMongo.data,
+        'review',
+      );
       page.commentReject = validLastChangeReject.comment;
     }
 
@@ -148,12 +155,12 @@ export class PagesService {
     const pageMongo = (await this.pageModel.findById(
       page.mongoId,
     )) as PageMongoI;
-    page.data = await this.replaceRefText(pageMongo.data);
+    page.data = await this.replaceRefText(pageMongo.data, 'current');
 
     const pageReviewMongo = (await this.pageReviewModel.findById(
       page.reviewMongoId,
     )) as PageMongoI;
-    page.dataReview = await this.replaceRefText(pageReviewMongo.data);
+    page.dataReview = await this.replaceRefText(pageReviewMongo.data, 'review');
 
     return page;
   }
@@ -165,7 +172,7 @@ export class PagesService {
       const dataSource = Database.getConnection();
       await dataSource.transaction(async (cnx) => {
         if (updatePageDto.data) {
-          const getRefText = await this.saveRefText(updatePageDto);
+          const getRefText = await this.saveRefText(updatePageDto, id);
 
           const createdPageReview = new this.pageReviewModel(getRefText);
           const pageReviewData = await createdPageReview.save();
@@ -208,6 +215,7 @@ export class PagesService {
                   languageId: detail.lang,
                   ref: reference.ref,
                   text: reference.value,
+                  pageId: id,
                 },
                 cnx,
               );
@@ -254,7 +262,7 @@ export class PagesService {
     return this.findOne(id);
   }
 
-  async saveRefText(updatePageDto: UpdatePageDto) {
+  async saveRefText(updatePageDto: UpdatePageDto, pageId: number) {
     const dataSource = Database.getConnection();
 
     await dataSource.transaction(async (cnx) => {
@@ -268,7 +276,7 @@ export class PagesService {
               textRefs.push(key);
             });
             for (const textRef of textRefs) {
-              const findReference = await this.referenceRepository.get(
+              const findReference = await this.referenceRepository.getRefReview(
                 column.element.text[textRef],
               );
               if (findReference.length === 0) {
@@ -280,7 +288,7 @@ export class PagesService {
               const updatePromises = Object.keys(language)
                 .filter((key) => key !== 'languageId')
                 .map((key) =>
-                  this.createOrUpdateRef(column, key, cnx, language),
+                  this.createOrUpdateRef(column, key, cnx, language, pageId),
                 );
 
               await Promise.all(updatePromises);
@@ -299,27 +307,31 @@ export class PagesService {
     key: string,
     cnx: EntityManager,
     language: ElementDataI,
+    pageId: number,
   ) {
-    const findReferenceLanguage = await this.referenceRepository.find(
+    const findReferenceLanguage = await this.referenceRepository.findRefReview(
       column.element.text[key],
       Number(language['languageId']),
+      pageId,
     );
 
     if (!findReferenceLanguage) {
-      await this.referenceRepository.create(
+      await this.referenceRepository.createRefReview(
         {
           languageId: Number(language['languageId']),
           ref: column.element.text[key],
           text: language[key],
+          pageId,
         },
         cnx,
       );
     } else {
-      await this.referenceRepository.update(
+      await this.referenceRepository.updateRefReview(
         {
           languageId: Number(language['languageId']),
           ref: column.element.text[key],
           text: language[key],
+          pageId,
         },
         cnx,
       );
@@ -328,7 +340,7 @@ export class PagesService {
     return column;
   }
 
-  async replaceRefText(data: PageDataMongoI) {
+  async replaceRefText(data: PageDataMongoI, state: 'current' | 'review') {
     data = JSON.parse(JSON.stringify(data));
     for (const section of data.body['data']) {
       for (const row of section.rows) {
@@ -340,9 +352,16 @@ export class PagesService {
           });
           column.element.dataText = [];
           for (const textRef of textRefs) {
-            const findReference = await this.referenceRepository.get(
-              column.element.text[textRef],
-            );
+            let findReference: ReferenceI[] | ReferenceReviewI[] = null;
+            if (state === 'current') {
+              findReference = await this.referenceRepository.get(
+                column.element.text[textRef],
+              );
+            } else {
+              findReference = await this.referenceRepository.getRefReview(
+                column.element.text[textRef],
+              );
+            }
             findReference.forEach((reference) => {
               column.element.dataText.push({
                 languageId: reference.languageId.toString(),
@@ -403,7 +422,7 @@ export class PagesService {
     const pageMongo = (await this.pageModel.findById(
       page.mongoId,
     )) as PageMongoI;
-    page.data = await this.replaceRefText(pageMongo.data);
+    page.data = await this.replaceRefText(pageMongo.data, 'current');
     const languages = await this.languageRepository.get({
       limit: 9999,
       page: 1,
@@ -476,6 +495,7 @@ export class PagesService {
         { data: contentPage.data },
         { new: true },
       );
+      await this.createOrUpdateRefFromReview(pageReview.id);
 
       const languages = await this.languageRepository.get({
         limit: 9999,
@@ -524,5 +544,42 @@ export class PagesService {
     } as unknown as NotifyI);
 
     this.notifyGateway.sendToUser(notify.roleId.toString(), createNotify);
+  }
+
+  async createOrUpdateRefFromReview(pageId: number) {
+    const getAllRefReview =
+      await this.referenceRepository.getRefReviewByPageId(pageId);
+
+    const dataSource = Database.getConnection();
+    await dataSource.transaction(async (cnx) => {
+      for (let refReview of getAllRefReview) {
+        const findReference = await this.referenceRepository.find(
+          refReview.ref,
+          refReview.languageId,
+        );
+
+        if (!findReference) {
+          await this.referenceRepository.create(
+            {
+              languageId: refReview.languageId,
+              ref: refReview.ref,
+              text: refReview.text,
+              pageId,
+            },
+            cnx,
+          );
+        } else {
+          await this.referenceRepository.update(
+            {
+              languageId: findReference.languageId,
+              ref: findReference.ref,
+              text: refReview.text,
+              pageId,
+            },
+            cnx,
+          );
+        }
+      }
+    });
   }
 }

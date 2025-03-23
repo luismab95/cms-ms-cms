@@ -52,4 +52,5 @@ export interface MicrositieI {
   path: string;
   sitieId: number;
   status?: boolean;
+  pathPage?: string;
 }

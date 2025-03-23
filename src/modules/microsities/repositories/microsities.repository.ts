@@ -7,7 +7,7 @@ import {
 import { errorQuery, queryFilter } from 'src/shared/helpers/database.helper';
 import { ColumnsEnum } from 'src/shared/enums/columns.enum';
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { Micrositie } from 'lib-database/src/entities/public-api';
+import { Micrositie, Page } from 'lib-database/src/entities/public-api';
 import {
   PaginationResponseI,
   PaginationResquestDto,
@@ -59,9 +59,12 @@ export class MicrosityRepository {
         'm.path as "path"',
         'm.status as status',
         'm.sitie_id as "sitieId"',
+        'p.path as "pathPage"',
       ])
       .from(Micrositie, 'm')
-      .where(`m.${field} = :value`, { value });
+      .innerJoin(Page, 'p', 'p.micrositie_id = m.id')
+      .where(`m.${field} = :value`, { value })
+      .andWhere('p.is_home_page = true');
     return query.getRawOne<MicrositieI>();
   }
 
