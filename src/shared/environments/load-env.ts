@@ -16,8 +16,8 @@ export const config = {
     redisUsername: process.env.REDIS_USERNAME,
     redisPassword: process.env.REDIS_PASSWORD,
     jwtSecretKey: process.env.JWT_SECRET_KEY,
-    msLogs: process.env.MS_LOGS,
     msEmail: process.env.MS_EMAIL,
     cryptoKey: process.env.CRYPTO_KEY,
+    corsOrigin: process.env.CORS_ORIGIN,
   },
 };
