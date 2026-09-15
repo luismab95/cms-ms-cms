@@ -80,10 +80,11 @@ export class ReferenceRepository {
   async getAll(dataSource: EntityManager): Promise<ReferenceI[]> {
     const query = dataSource
       .createQueryBuilder()
-      .select(['r.ref as ref', 'r.text as "text"'])
+      .select(['r.ref as ref', 'r.text as "text"', 'r.page_id as "pageId"'])
       .from(Reference, 'r')
       .distinctOn(['r.ref'])
       .orderBy('r.ref', 'ASC')
+      .addOrderBy('r.language_id', 'ASC')
       .where('r.status = :status', { status: true });
     return await query.getRawMany<ReferenceI>();
   }

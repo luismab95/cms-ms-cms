@@ -48,6 +48,7 @@ export class UpdateLanguageDto {
 
 export interface LanguageI {
   id?: number;
+  url?: string;
   lang: string;
   name: string;
   icon: string;

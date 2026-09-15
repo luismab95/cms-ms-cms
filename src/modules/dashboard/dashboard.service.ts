@@ -103,7 +103,7 @@ export class DashboardService {
           name: 'Visitas',
           data: Object.keys(groupedYearVisitLastYear).map((key) => ({
             x: key,
-            y: groupedYearVisitThisWeek[key].length,
+            y: groupedYearVisitThisWeek[key]?.length || 0,
           })),
         },
       ],
@@ -112,7 +112,7 @@ export class DashboardService {
           name: 'Visitas',
           data: Object.keys(groupedYearVisitThisWeek).map((key) => ({
             x: key,
-            y: groupedYearVisitThisWeek[key].length,
+            y: groupedYearVisitThisWeek[key]?.length || 0,
           })),
         },
       ],

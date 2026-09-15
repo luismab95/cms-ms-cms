@@ -111,21 +111,21 @@ export class LanguageRepository {
 
     return await dataSource
       .createQueryBuilder()
-      .select(['l.lang as lang', 'l.icon as icon'])
+      .select(['l.lang as lang', 'l.icon as icon', 'l.name as name'])
       .addSelect((qb) => {
         return qb
           .select('p.value')
           .from(Parameter, 'p')
           .where('p.code = :key', { key: 'APP_STATICS_URL' })
           .limit(1);
-      }, 'name')
+      }, 'url')
       .from(Language, 'l')
       .where('l.status = true')
       .orderBy('l.id', 'ASC')
       .getRawMany<LanguageI>()
       .then((results) => {
         return results.map((result) => {
-          result.icon = result.name + result.icon;
+          result.icon = result.url + result.icon;
           return result;
         });
       });
