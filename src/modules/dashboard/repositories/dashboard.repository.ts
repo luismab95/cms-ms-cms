@@ -5,6 +5,7 @@ import {
   Template,
   InjectModel,
   Model,
+  File as FileEntity,
 } from 'cms-lib-database';
 import moment from 'moment';
 import {
@@ -24,7 +25,7 @@ export class DashboardRepository {
 
     const pageRepository = dataSource.getRepository(Page);
     const micrositieRepository = dataSource.getRepository(Micrositie);
-    const filesRepository = dataSource.getRepository(File);
+    const filesRepository = dataSource.getRepository(FileEntity);
     const templatesRepository = dataSource.getRepository(Template);
 
     const pages = await pageRepository
