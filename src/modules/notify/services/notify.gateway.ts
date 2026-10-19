@@ -5,13 +5,16 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
+import { config as resourcesConfig } from 'cms-lib-resources';
 import { Server, Socket } from 'socket.io';
 import type { NotifyI } from '../dto/notify.dto.js';
+
+const { corsOrigin } = resourcesConfig.server;
 
 @WebSocketGateway({
   path: '/ms-cms/notify-socket',
   cors: {
-    origin: '*',
+    origin: corsOrigin,
   },
 })
 export class NotifyGateway {
