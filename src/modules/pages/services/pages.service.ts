@@ -8,11 +8,13 @@ import {
   EntityManager,
   Redis,
 } from 'cms-lib-database';
-import { RolesIdEnum, OK_200, randomCharacters } from 'cms-lib-resources';
+import { OK_200, randomCharacters, RolesIdEnum } from 'cms-lib-resources';
 import { VisitMongoI } from '@modules/dashboard/dto/dashboard.dto.js';
 import { NotifyRepository } from '@modules/notify/repositories/notify.repository.js';
 import { NotifyGateway } from '@modules/notify/services/notify.gateway.js';
 import { LanguageRepository } from '@modules/languages/repositories/language.repository.js';
+import { PageReviewRepository } from '@modules/page-review/repositories/pages-review.repository.js';
+import { ReviewPageDataI } from '@modules/page-review/dto/page-review.dto.js';
 import { NotifyI } from '@modules/notify/dto/notify.dto.js';
 import { createPage } from '@shared/helpers/page.helper.js';
 import { ColumnI } from '@shared/interfaces/page.interface.js';
@@ -29,11 +31,10 @@ import {
   PageDataMongoI,
   PageI,
   PageMongoI,
-  PageReviewI,
-  ReviewPageDto,
   UpdatePageDto,
 } from '../dto/page.dto.js';
 import { PageRepository } from '../repositories/page.repository.js';
+import { PermissionSitieRepository } from '@shared/repositories/permission-sitie.repository.js';
 
 moment.locale('es');
 moment.tz.setDefault('America/Guayaquil');
@@ -42,6 +43,8 @@ moment.tz.setDefault('America/Guayaquil');
 export class PagesService {
   constructor(
     private readonly pageRepository: PageRepository,
+    private readonly permissionSitieRepository: PermissionSitieRepository,
+    private readonly pageReviewRepository: PageReviewRepository,
     private readonly referenceRepository: ReferenceRepository,
     private readonly languageRepository: LanguageRepository,
     private readonly notifyRepository: NotifyRepository,
@@ -68,10 +71,6 @@ export class PagesService {
 
   async findAll(getallDto: GetallDto, userId: number) {
     return await this.pageRepository.get(getallDto, userId);
-  }
-
-  async findAllReview(getallDto: GetallDto) {
-    return await this.pageRepository.getForReview(getallDto);
   }
 
   async findOne(id: number) {
@@ -116,52 +115,28 @@ export class PagesService {
       });
     }
 
-    const validReviewMode = await this.pageRepository.findPageReview(
-      page.id,
-      'pending',
-    );
-    const validLastChangeReject = await this.pageRepository.findLastPageReview(
-      page.id,
-    );
+    const pageReview = await this.pageReviewRepository.findPageReview(page.id);
 
-    page.review = !!validReviewMode ? true : false;
-    page.lastChangeReject = !validLastChangeReject
-      ? false
-      : validLastChangeReject.status === 'rejected';
+    if (pageReview) {
+      page.reviewPage = {
+        review:
+          pageReview.statusReview === 'pending' ||
+          pageReview.statusReview === 'assigned',
+        data: {
+          ...pageReview,
+        },
+      };
+    }
 
-    if (page.lastChangeReject) {
+    if (page.reviewPage?.review) {
       const pageReviewMongo = (await this.pageReviewModel.findById(
-        validLastChangeReject?.mongoId,
+        pageReview?.mongoId,
       )) as PageMongoI;
-      page.dataReview = await this.replaceRefText(
+      page.reviewPage.data!.dataReview = await this.replaceRefText(
         pageReviewMongo.data,
         'review',
       );
-      page.commentReject = validLastChangeReject?.comment;
     }
-
-    return page;
-  }
-
-  async findOneReview(id: number) {
-    const page = await this.pageRepository.findForReview(id);
-    if (page === undefined) {
-      throw new HttpException(
-        'No se encontro datos de la página',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const pageMongo = (await this.pageModel.findById(
-      page.mongoId,
-    )) as PageMongoI;
-    page.data = await this.replaceRefText(pageMongo.data, 'current');
-
-    const pageReviewMongo = (await this.pageReviewModel.findById(
-      page.reviewMongoId,
-    )) as PageMongoI;
-    page.dataReview = await this.replaceRefText(pageReviewMongo.data, 'review');
-
     return page;
   }
 
@@ -188,22 +163,23 @@ export class PagesService {
           await this.deleteDraft(id);
           const newpageReview = {
             pageId: id,
-            userId: this.request['userId'],
-            status: 'pending',
+            userChangesId: this.request.userId,
+            statusReview: 'pending',
             mongoId: String(pageReviewData._id),
-          } as PageReviewI;
-          await this.pageRepository.createReviewPage(newpageReview, cnx);
+          } as ReviewPageDataI;
 
-          const rolesByNotify: number[] = [RolesIdEnum.review];
+          await this.pageReviewRepository.createReviewPage(newpageReview, cnx);
+          const rolesByNotify: number[] = [
+            RolesIdEnum.review,
+            RolesIdEnum.admin,
+          ];
           for (let role of rolesByNotify) {
-            await this.createNotify({
-              message: `Los página <strong>${page.name}</strong> tiene cambios pendientes por <em>revisar</em>.`,
-              path: `admin/modules/review-pages/detail`,
-              roleId: role,
-              metadata: {
-                id: page.id,
-              },
-            } as unknown as NotifyI);
+            await this.createNotify(
+              page,
+              `La página ${page.name} tiene cambios pendientes por revisar.`,
+              role,
+              cnx,
+            );
           }
         }
 
@@ -259,7 +235,7 @@ export class PagesService {
     return this.findOne(id);
   }
 
-  async saveRefText(updatePageDto: UpdatePageDto, pageId: number) {
+  private async saveRefText(updatePageDto: UpdatePageDto, pageId: number) {
     const dataSource = Database.getConnection();
 
     const pageData = updatePageDto.data as PageDataMongoI;
@@ -301,7 +277,7 @@ export class PagesService {
     return updatePageDto;
   }
 
-  async createOrUpdateRef(
+  private async createOrUpdateRef(
     column: ColumnI,
     key: string,
     cnx: EntityManager,
@@ -339,7 +315,10 @@ export class PagesService {
     return column;
   }
 
-  async replaceRefText(data: PageDataMongoI, state: 'current' | 'review') {
+  private async replaceRefText(
+    data: PageDataMongoI,
+    state: 'current' | 'review',
+  ) {
     data = JSON.parse(JSON.stringify(data));
     for (const section of data.body['data']) {
       for (const row of section.rows) {
@@ -462,7 +441,7 @@ export class PagesService {
     return response;
   }
 
-  async saveVisitPage(
+  private async saveVisitPage(
     page: PageI,
     micrositieId: number | null,
     params: GetPageParamsDto,
@@ -486,118 +465,56 @@ export class PagesService {
     await createdVisitPage.save();
   }
 
-  async reviewPage(id: number, reviewPageDto: ReviewPageDto) {
-    await this.pageRepository.updateReviewPage(id, reviewPageDto);
-    const pageReview = await this.pageRepository.findReview(id);
-
-    if (pageReview === undefined) {
+  private async createNotify(
+    page: PageI,
+    message: string,
+    roleId: number,
+    cnx: EntityManager,
+  ) {
+    const reviewPageData = await this.pageReviewRepository.findPageReview(
+      page.id,
+    );
+    if (!reviewPageData) {
       throw new HttpException(
-        'No se encontro datos de la página',
-        HttpStatus.BAD_REQUEST,
+        'Datos de revision no encontrados',
+        HttpStatus.NOT_FOUND,
       );
     }
 
-    const rolesByNotify: number[] = [
-      RolesIdEnum.design,
-      RolesIdEnum.editor,
-      RolesIdEnum.admin,
-    ];
+    const { id, comment, statusReview, userReview, userChanges, pageId } =
+      reviewPageData;
 
-    if (reviewPageDto.status === 'approved') {
-      const contentPage = await this.pageReviewModel.findById(
-        pageReview.reviewMongoId,
-      );
+    let createNotifies: NotifyI[] = [];
+    const usersToNotifyData = await this.permissionSitieRepository.findByRole(
+      roleId,
+      page.sitieId,
+      page.micrositieId,
+    );
+    const usersToNotify = usersToNotifyData.map((item) => item.userId);
 
-      await this.pageModel.findByIdAndUpdate(
-        pageReview.mongoId,
-        { data: contentPage?.data },
-        { new: true },
-      );
-      await this.createOrUpdateRefFromReview(pageReview.id);
-
-      const languages = await this.languageRepository.get({
-        limit: 9999,
-        page: 1,
-        status: true,
-        search: null,
-      });
-      for (let lang of languages.records) {
-        await Redis.del(`page-${pageReview.id}-${lang.lang}`);
-      }
-
-      for (let role of rolesByNotify) {
-        await this.createNotify({
-          message: `Los cambios en la página <strong>${pageReview.name}</strong> han sido <em>aprobados</em>.`,
-          path: `admin/modules/pages/detail`,
-          roleId: role,
-          metadata: {
-            id: pageReview.id,
-            micrositieId: pageReview.micrositieId,
-          },
-        } as unknown as NotifyI);
-      }
-    } else {
-      for (let role of rolesByNotify) {
-        await this.createNotify({
-          message: `Los cambios en la página <strong>${pageReview.name}</strong> han sido <em>rechazados</em>.`,
-          path: `admin/modules/pages/detail`,
-          roleId: role,
-          metadata: {
-            id: pageReview.id,
-            micrositieId: pageReview.micrositieId,
-          },
-        } as unknown as NotifyI);
-      }
+    for (const userId of usersToNotify) {
+      const newNotify = {
+        message,
+        readStatus: false,
+        metadata: {
+          pageIdReviewId: id,
+          comment,
+          pageId,
+          entityName: page.name,
+          micrositieId: page.micrositieId,
+          statusReview,
+          userReview,
+          userChanges,
+        },
+        userId,
+      } as NotifyI;
+      const createNotify = await this.notifyRepository.create(newNotify, cnx);
+      newNotify.id = createNotify.id;
+      createNotifies.push(createNotify);
     }
-    return OK_200;
-  }
 
-  async createNotify(notify: NotifyI) {
-    const createNotify = await this.notifyRepository.create({
-      message: notify.message,
-      path: notify.path,
-      roleId: notify.roleId,
-      metadata: notify.metadata,
-      readStatus: false,
-    } as unknown as NotifyI);
-
-    this.notifyGateway.sendToUser(notify.roleId.toString(), createNotify);
-  }
-
-  async createOrUpdateRefFromReview(pageId: number) {
-    const getAllRefReview =
-      await this.referenceRepository.getRefReviewByPageId(pageId);
-
-    const dataSource = Database.getConnection();
-    await dataSource.transaction(async (cnx) => {
-      for (let refReview of getAllRefReview) {
-        const findReference = await this.referenceRepository.find(
-          refReview.ref,
-          refReview.languageId,
-        );
-
-        if (!findReference) {
-          await this.referenceRepository.create(
-            {
-              languageId: refReview.languageId,
-              ref: refReview.ref,
-              text: refReview.text,
-              pageId,
-            },
-            cnx,
-          );
-        } else {
-          await this.referenceRepository.update(
-            {
-              languageId: findReference.languageId,
-              ref: findReference.ref,
-              text: refReview.text,
-              pageId,
-            },
-            cnx,
-          );
-        }
-      }
-    });
+    for (const notify of createNotifies) {
+      this.notifyGateway.sendToUser(notify.userId.toString(), notify);
+    }
   }
 }

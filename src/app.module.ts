@@ -12,6 +12,7 @@ import { PagesModule } from '@modules/pages/pages.module.js';
 import { PublicModule } from '@modules/public/public.module.js';
 import { SitieModule } from '@modules/sitie/sitie.module.js';
 import { TemplatesModule } from '@modules/templates/templates.module.js';
+import { PagesReviewModule } from '@modules/page-review/pages-review.module.js';
 const { mongoUri } = config.server;
 
 @Module({
@@ -27,6 +28,7 @@ const { mongoUri } = config.server;
     PublicModule,
     DashboardModule,
     NotifyModule,
+    PagesReviewModule
   ],
   controllers: [AppController],
   providers: [

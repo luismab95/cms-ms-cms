@@ -1,8 +1,10 @@
 export interface NotifyI {
-  id: number;
+  id?: number;
   message: string;
-  path: string;
-  metadata: { [key: string]: any };
-  roleId: number;
+  metadata: {
+    [key: string]: any;
+  };
   readStatus: boolean;
+  userId: number;
+  createdAt?: Date;
 }

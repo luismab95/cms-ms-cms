@@ -15,6 +15,7 @@ import { Document } from 'cms-lib-database';
 import type { PageReviewStatus } from 'cms-lib-database';
 import { SectionI } from '@shared/interfaces/page.interface.js';
 import { ReferenceI } from '@shared/interfaces/reference.interface.js';
+import { ReviewPageDataI } from '@modules/page-review/dto/page-review.dto.js';
 
 export class CreatePageDto {
   @IsString({ message: 'Nombre debe ser texto' })
@@ -111,15 +112,17 @@ export interface PageI {
   micrositieId: number | null;
   status: boolean;
   data?: PageDataMongoI;
-  dataReview?: PageDataMongoI;
   draft?: PageDataMongoI;
   details?: PageDetailReferenceI[];
   aliasRef?: string;
   descriptionRef?: string;
   seoKeywordsRef?: string;
-  review?: boolean;
-  lastChangeReject?: boolean;
-  commentReject?: string;
+  reviewPage?: ReviewPageI;
+}
+
+export interface ReviewPageI {
+  review: boolean;
+  data: ReviewPageDataI | null;
 }
 
 export interface PageDetailI {
@@ -164,23 +167,6 @@ export class GetPageParamsDto {
   @IsString({ message: 'Valor no válido' })
   @IsIn(['true', 'false'], { message: 'Valor no válido' })
   preview: string;
-}
-
-export interface PageReviewI {
-  id: number;
-  pageId: number;
-  userId: number;
-  status: PageReviewStatus;
-  mongoId: string;
-  comment: string;
-}
-
-export interface PageReviewDataI extends PageI {
-  reviewId: number;
-  reviewComment: string;
-  reviewStatus: PageReviewStatus;
-  reviewMongoId: string;
-  micrositieName: string;
 }
 
 export class ReviewPageDto {

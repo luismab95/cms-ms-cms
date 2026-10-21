@@ -1082,7 +1082,7 @@ packages:
     engines: {node: '>=0.8'}
 
   cms-lib-database@file:cms-lib-database-0.0.1.tgz:
-    resolution: {integrity: sha512-Zi49klVH6ifTP9OZ8z1O7WqfwidA0ZC7ywrhQrnLDl6UfQ6n7PUQAUFbK/3qGI8UdIZ2BcFpFs4gUT62DZw94Q==, tarball: file:cms-lib-database-0.0.1.tgz}
+    resolution: {integrity: sha512-KLc4pglrTcjRXcI3RWVxvZPqqdzKpA2n4rFZEe456wTXwe9+kE/dDX4N2x4qxHKXM0wdYNF/3kF7482tM/SYwQ==, tarball: file:cms-lib-database-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=24.20.*', npm: '>=11.19.*'}
 

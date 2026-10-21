@@ -31,13 +31,13 @@ export class NotifyGateway {
 
   @SubscribeMessage('joinRoom')
   handleJoinRoom(
-    @MessageBody() roleId: string,
+    @MessageBody() userId: string,
     @ConnectedSocket() client: Socket,
   ) {
-    client.join(roleId);
+    client.join(userId);
   }
 
-  sendToUser(roleId: string, notification: NotifyI) {
-    this.server.to(roleId).emit('receiveNotification', notification);
+  sendToUser(userId: string, notification: NotifyI) {
+    this.server.to(userId).emit('receiveNotification', notification);
   }
 }

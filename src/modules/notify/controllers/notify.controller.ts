@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Req,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -19,9 +20,10 @@ export class NotifyController {
 
   @Get()
   @UsePipes(new ValidationPipe())
-  async findAll(): Promise<ServiceResponseI<NotifyI[]>> {
+  async findAll(@Req() req: Request): Promise<ServiceResponseI<NotifyI[]>> {
+    const userId = (req as Request & { userId: number }).userId;
     return {
-      message: await this.notifyService.getNotifiesByRoleId(),
+      message: await this.notifyService.getNotifiesByUserId(userId),
       statusCode: HttpStatus.OK,
     };
   }

@@ -17,6 +17,7 @@ import { SitieRepository } from '@modules/sitie/repositories/sitie.repository.js
 import { SitieService } from '@modules/sitie/services/sitie.service.js';
 import { TemplateRepository } from '@modules/templates/repositories/template.repository.js';
 import { TemplatesService } from '@modules/templates/services/templates.service.js';
+import { PageReviewRepository } from '@modules/page-review/repositories/pages-review.repository.js';
 import { PermissionSitieRepository } from '@shared/repositories/permission-sitie.repository.js';
 import { ReferenceRepository } from '@shared/repositories/reference.repository.js';
 import { ParameterRepository } from '@shared/repositories/parameter.repository.js';
@@ -45,7 +46,8 @@ import { PublicController } from './controllers/public.controller.js';
     TemplateRepository,
     NotifyRepository,
     NotifyGateway,
-    ParameterRepository
+    ParameterRepository,
+    PageReviewRepository
   ],
 })
 export class PublicModule {}

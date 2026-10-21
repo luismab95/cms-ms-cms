@@ -23,8 +23,6 @@ import {
   UpdatePageDto,
   GetallDto,
   PageI,
-  ReviewPageDto,
-  PageReviewDataI,
 } from '../dto/page.dto.js';
 import { PagesService } from '../services/pages.service.js';
 
@@ -57,28 +55,6 @@ export class PagesController {
     };
   }
 
-  @Get('review')
-  @UsePipes(new ValidationPipe())
-  async findAllReview(
-    @Query() GetallDto: GetallDto,
-  ): Promise<ServiceResponseI<PaginationResponseI<PageReviewDataI[]>>> {
-    return {
-      message: await this.pagesService.findAllReview(GetallDto),
-      statusCode: HttpStatus.OK,
-    };
-  }
-
-  @Get('review/:id')
-  @UsePipes(new ValidationPipe())
-  async findOneReview(
-    @Param('id') id: string,
-  ): Promise<ServiceResponseI<PageReviewDataI>> {
-    return {
-      message: await this.pagesService.findOneReview(Number(id)),
-      statusCode: HttpStatus.OK,
-    };
-  }
-
   @Get(':id')
   @UsePipes(new ValidationPipe())
   async findOne(@Param('id') id: string): Promise<ServiceResponseI<PageI>> {
@@ -96,18 +72,6 @@ export class PagesController {
   ): Promise<ServiceResponseI<string>> {
     return {
       message: await this.pagesService.saveDraft(Number(id), updatePageDto),
-      statusCode: HttpStatus.OK,
-    };
-  }
-
-  @Patch('review/:id')
-  @UsePipes(new ValidationPipe())
-  async rejectReviewPage(
-    @Param('id') id: string,
-    @Body() ReviewPageDto: ReviewPageDto,
-  ): Promise<ServiceResponseI<string>> {
-    return {
-      message: await this.pagesService.reviewPage(Number(id), ReviewPageDto),
       statusCode: HttpStatus.OK,
     };
   }

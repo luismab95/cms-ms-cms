@@ -108,6 +108,52 @@ export class PermissionSitieRepository {
     return await query.getRawOne<PermissionSitieI>();
   }
 
+  async findByRole(
+    roleId: number,
+    sitieId: number,
+    micrositieId: number | null,
+  ): Promise<PermissionSitieI[]> {
+    const dataSource = Database.getConnection();
+    const query = dataSource
+      .createQueryBuilder()
+      .select([
+        'ps.id as id',
+        'ps.user_id as "userId"',
+        'ps.sitie_id as "sitieId"',
+        'ps.micrositie_id as "micrositieId"',
+        'ps.status as "status"',
+        'u.firstname as "firstname"',
+        'u.lastname as "lastname"',
+        'u.email as "email"',
+        'r.code as "role"',
+        'r.name as "roleName"',
+        's.name as "sitieName"',
+        'ms.name as "micrositieName"',
+      ])
+      .from(PermissionSitie, 'ps')
+      .innerJoin(User, 'u', 'u.id = ps.user_id')
+      .innerJoin(Role, 'r', 'r.id = u.role_id');
+
+    if (micrositieId !== null) {
+      query.innerJoin(
+        Micrositie,
+        'ms',
+        'ms.id = ps.micrositie_id and ms.id = :micrositieId',
+        { micrositieId },
+      );
+    } else {
+      query.innerJoin(Sitie, 's', 's.id = ps.sitie_id and s.id = :sitieId', {
+        sitieId,
+      });
+    }
+
+    query
+      .where('r.id = :roleId', { roleId })
+      .andWhere('ps.status = :status', { status: true });
+
+    return await query.getRawMany<PermissionSitieI>();
+  }
+
   async getAll(
     sitieId: number | null,
     micrositieId: number | null,

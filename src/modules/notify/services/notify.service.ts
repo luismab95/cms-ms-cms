@@ -1,19 +1,14 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
+import { Injectable } from '@nestjs/common';
 import { OK_200 } from 'cms-lib-resources';
 import { NotifyRepository } from '../repositories/notify.repository.js';
 import { NotifyI } from '../dto/notify.dto.js';
 
 @Injectable()
 export class NotifyService {
-  constructor(
-    private readonly notifyRepository: NotifyRepository,
-    @Inject(REQUEST) private readonly request: Request & { roleId: number },
-  ) {}
+  constructor(private readonly notifyRepository: NotifyRepository) {}
 
-  async getNotifiesByRoleId() {
-    const roleId = this.request['roleId'];
-    return await this.notifyRepository.getAll(Number(roleId));
+  async getNotifiesByUserId(userId: number) {
+    return await this.notifyRepository.getAll(Number(userId));
   }
 
   async updateNotifyStatus(id: number) {
