@@ -1,5 +1,11 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import type { PageReviewStatus } from 'cms-lib-database';
+import {
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+import type { PageReviewStatus, ReviewCommentI } from 'cms-lib-database';
 import { PageDataMongoI, PageI } from '@modules/pages/dto/page.dto.js';
 import { PaginationResquestDto } from 'cms-lib-resources';
 
@@ -9,6 +15,7 @@ export interface ReviewPageDataI extends Partial<
   id: number;
   pageId: number;
   comment: string;
+  comments: ReviewCommentI[];
   mongoId: string;
   statusReview: PageReviewStatus;
   userChangesId: number;
@@ -19,8 +26,11 @@ export interface ReviewPageDataI extends Partial<
 }
 
 export class ReviewPageDto {
+  @IsArray({ message: 'Comentarios debe ser un array' })
+  comments: ReviewCommentI[];
+
   @IsString({ message: 'Comentario debe ser texto' })
-  @IsNotEmpty({ message: 'Comentario es requerido' })
+  @IsOptional()
   comment: string;
 
   @IsString({ message: 'Estado debe ser texto' })

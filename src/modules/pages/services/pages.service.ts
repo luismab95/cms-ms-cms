@@ -115,15 +115,17 @@ export class PagesService {
       });
     }
 
-    const pageReview = await this.pageReviewRepository.findPageReview(page.id);
+    const pageReview = await this.pageReviewRepository.findPageReview(
+      page.id,
+      null,
+    );
 
     if (pageReview) {
       page.reviewPage = {
-        review:
-          pageReview.statusReview === 'pending' ||
-          pageReview.statusReview === 'assigned',
+        review: pageReview.statusReview !== 'approved',
         data: {
           ...pageReview,
+          name: page.name,
         },
       };
     }
@@ -473,6 +475,7 @@ export class PagesService {
   ) {
     const reviewPageData = await this.pageReviewRepository.findPageReview(
       page.id,
+      cnx,
     );
     if (!reviewPageData) {
       throw new HttpException(

@@ -17,7 +17,11 @@ import {
   PaginationResponseI,
 } from 'cms-lib-resources';
 import { PageI } from '@modules/pages/dto/page.dto.js';
-import { ReviewPageDataI, GetallDto } from '../dto/page-review.dto.js';
+import {
+  ReviewPageDataI,
+  GetallDto,
+  ReviewPageDto,
+} from '../dto/page-review.dto.js';
 import { PagesReviewService } from '../services/pages-review.service.js';
 
 @Controller('reviews/page')
@@ -51,18 +55,18 @@ export class PagesReviewController {
     };
   }
 
-  // @Patch(':id')
-  // @UsePipes(new ValidationPipe())
-  // async rejectReviewPage(
-  //   @Param('id') id: string,
-  //   @Body() ReviewPageDto: ReviewPageDto,
-  // ): Promise<ServiceResponseI<string>> {
-  //   return {
-  //     message: await this.pagesReviewService.reviewPage(
-  //       Number(id),
-  //       ReviewPageDto,
-  //     ),
-  //     statusCode: HttpStatus.OK,
-  //   };
-  // }
+  @Patch(':id')
+  @UsePipes(new ValidationPipe())
+  async rejectReviewPage(
+    @Param('id') id: string,
+    @Body() ReviewPageDto: ReviewPageDto,
+  ): Promise<ServiceResponseI<string>> {
+    return {
+      message: await this.pagesReviewService.reviewPage(
+        Number(id),
+        ReviewPageDto,
+      ),
+      statusCode: HttpStatus.OK,
+    };
+  }
 }

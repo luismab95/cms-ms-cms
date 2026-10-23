@@ -7,6 +7,7 @@ import {
   PageReview,
   Micrositie,
   User,
+  DataSource,
 } from 'cms-lib-database';
 import {
   errorQuery,
@@ -21,8 +22,11 @@ import {
 } from '../dto/page-review.dto.js';
 
 export class PageReviewRepository {
-  async findPageReview(pageId: number): Promise<ReviewPageDataI | undefined> {
-    const dataSource = Database.getConnection();
+  async findPageReview(
+    pageId: number,
+    dataSource: EntityManager | null | DataSource,
+  ): Promise<ReviewPageDataI | undefined> {
+    if (dataSource === null) dataSource = Database.getConnection();
     const query = dataSource
       .createQueryBuilder()
       .select([
@@ -30,6 +34,7 @@ export class PageReviewRepository {
         'pr.mongo_id as "mongoId"',
         'pr.page_id as "pageId"',
         'pr.comment as "comment"',
+        'pr.comments as "comments"',
         'pr.status_review as "statusReview"',
         `CONCAT(uc.firstname, ' ', uc.lastname) as "userChanges"`,
         `CONCAT(ur.firstname, ' ', ur.lastname) as "userReview"`,
@@ -69,9 +74,9 @@ export class PageReviewRepository {
   async updateReviewPage(
     id: number,
     reviewPage: ReviewPageDataI,
+    dataSource: EntityManager,
   ): Promise<number> {
     try {
-      const dataSource = Database.getConnection();
       const update = await dataSource
         .createQueryBuilder()
         .update(PageReview)
@@ -149,7 +154,7 @@ export class PageReviewRepository {
       .addGroupBy('uc.lastname')
       .addGroupBy('ur.firstname')
       .addGroupBy('ur.lastname')
-      .orderBy('p.id', 'DESC')
+      .orderBy('pr.id', 'DESC')
       .offset((paginationRequest.page - 1) * paginationRequest.limit)
       .limit(paginationRequest.limit)
       .getRawMany<ReviewPageDataI>();
@@ -163,8 +168,11 @@ export class PageReviewRepository {
     };
   }
 
-  async findForReview(id: number): Promise<ReviewPageDataI | undefined> {
-    const dataSource = Database.getConnection();
+  async findForReview(
+    id: number,
+    dataSource: EntityManager | null | DataSource,
+  ): Promise<ReviewPageDataI | undefined> {
+    if (dataSource === null) dataSource = Database.getConnection();
     const query = dataSource
       .createQueryBuilder()
       .select([
@@ -172,10 +180,15 @@ export class PageReviewRepository {
         'pr.mongo_id as "mongoId"',
         'pr.page_id as "pageId"',
         'pr.comment as "comment"',
+        'pr.comments as "comments"',
         'pr.status_review as "statusReview"',
+        `CONCAT(uc.firstname, ' ', uc.lastname) as "userChanges"`,
+        `CONCAT(ur.firstname, ' ', ur.lastname) as "userReview"`,
       ])
       .from(PageReview, 'pr')
-      .where(`pr.id = :id`, { id });
+      .where(`pr.id = :id`, { id })
+      .innerJoin(User, 'uc', 'uc.id = pr.user_changes_id')
+      .leftJoin(User, 'ur', 'ur.id = pr.user_review_id');
 
     return query.getRawOne<ReviewPageDataI>();
   }

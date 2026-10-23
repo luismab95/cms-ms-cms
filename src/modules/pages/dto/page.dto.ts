@@ -168,13 +168,3 @@ export class GetPageParamsDto {
   @IsIn(['true', 'false'], { message: 'Valor no válido' })
   preview: string;
 }
-
-export class ReviewPageDto {
-  @IsString({ message: 'Comentario debe ser texto' })
-  @IsNotEmpty({ message: 'Comentario es requerido' })
-  comment: string;
-
-  @IsString({ message: 'Estado debe ser texto' })
-  @IsNotEmpty({ message: 'Estado es requerido' })
-  status: PageReviewStatus;
-}

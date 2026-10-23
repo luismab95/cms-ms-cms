@@ -128,13 +128,13 @@ export class PermissionSitieRepository {
         'r.code as "role"',
         'r.name as "roleName"',
         's.name as "sitieName"',
-        'ms.name as "micrositieName"',
       ])
       .from(PermissionSitie, 'ps')
       .innerJoin(User, 'u', 'u.id = ps.user_id')
       .innerJoin(Role, 'r', 'r.id = u.role_id');
 
     if (micrositieId !== null) {
+      query.addSelect(['ms.name as "micrositieName"']);
       query.innerJoin(
         Micrositie,
         'ms',
