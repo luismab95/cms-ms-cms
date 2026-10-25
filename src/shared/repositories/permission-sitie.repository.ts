@@ -127,7 +127,6 @@ export class PermissionSitieRepository {
         'u.email as "email"',
         'r.code as "role"',
         'r.name as "roleName"',
-        's.name as "sitieName"',
       ])
       .from(PermissionSitie, 'ps')
       .innerJoin(User, 'u', 'u.id = ps.user_id')
@@ -142,6 +141,7 @@ export class PermissionSitieRepository {
         { micrositieId },
       );
     } else {
+      query.addSelect(['s.name as "sitieName"']);
       query.innerJoin(Sitie, 's', 's.id = ps.sitie_id and s.id = :sitieId', {
         sitieId,
       });

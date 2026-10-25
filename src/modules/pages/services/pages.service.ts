@@ -81,7 +81,9 @@ export class PagesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    const draft = await Redis.get(`page-draft-${id}`);
+
+    const userId = this.request.userId;
+    const draft = await Redis.get(`page-draft-${id}-${userId}`);
     if (draft) page.draft = JSON.parse(draft);
     const pageMongo = (await this.pageModel.findById(
       page.mongoId,
@@ -146,6 +148,13 @@ export class PagesService {
     try {
       const page = await this.findOne(id);
 
+      if (page.reviewPage?.review && page.reviewPage?.data?.statusReview !== 'rejected') {
+        throw new HttpException(
+          'No se pudo actualizar el contenido de la página, esta se encuentra en modo revisión.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
       const dataSource = Database.getConnection();
       await dataSource.transaction(async (cnx) => {
         if (updatePageDto.data) {
@@ -156,21 +165,21 @@ export class PagesService {
 
           if (!pageReviewData) {
             throw new HttpException(
-              'No se pudo actualizar la informaciòn de la página',
+              'No se pudo actualizar el contenido de la página',
               HttpStatus.BAD_REQUEST,
             );
           }
 
           delete updatePageDto.data;
           await this.deleteDraft(id);
-          const newpageReview = {
+          const newPageReview = {
             pageId: id,
             userChangesId: this.request.userId,
             statusReview: 'pending',
             mongoId: String(pageReviewData._id),
           } as ReviewPageDataI;
 
-          await this.pageReviewRepository.createReviewPage(newpageReview, cnx);
+          await this.pageReviewRepository.createReviewPage(newPageReview, cnx);
           const rolesByNotify: number[] = [
             RolesIdEnum.review,
             RolesIdEnum.admin,
@@ -206,8 +215,10 @@ export class PagesService {
 
       return await this.findOne(id);
     } catch (error) {
+      console.log(error);
+      
       throw new HttpException(
-        'No se pudo actualizar la informaciòn de la página',
+        'No se pudo actualizar la informaciòn de la página.',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -227,13 +238,18 @@ export class PagesService {
 
   async saveDraft(id: number, updatePageDto: UpdatePageDto) {
     await this.findOne(id);
-    await Redis.set(`page-draft-${id}`, JSON.stringify(updatePageDto.data));
+    const userId = this.request.userId;
+    await Redis.set(
+      `page-draft-${id}-${userId}`,
+      JSON.stringify(updatePageDto.data),
+    );
     return OK_200;
   }
 
   async deleteDraft(id: number) {
     await this.findOne(id);
-    await Redis.del(`page-draft-${id}`);
+    const userId = this.request.userId;
+    await Redis.del(`page-draft-${id}-${userId}`);
     return this.findOne(id);
   }
 
@@ -500,7 +516,7 @@ export class PagesService {
         message,
         readStatus: false,
         metadata: {
-          pageIdReviewId: id,
+          reviewId: id,
           comment,
           pageId,
           entityName: page.name,

@@ -36,6 +36,8 @@ export class PageReviewRepository {
         'pr.comment as "comment"',
         'pr.comments as "comments"',
         'pr.status_review as "statusReview"',
+        'uc.id as "userChangesId"',
+        'ur.id as "userReviewId"',
         `CONCAT(uc.firstname, ' ', uc.lastname) as "userChanges"`,
         `CONCAT(ur.firstname, ' ', ur.lastname) as "userReview"`,
       ])

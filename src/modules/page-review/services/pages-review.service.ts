@@ -186,7 +186,7 @@ export class PagesReviewService {
         message,
         readStatus: false,
         metadata: {
-          pageIdReviewId: id,
+          reviewId: id,
           comment,
           pageId,
           entityName: page.name,
