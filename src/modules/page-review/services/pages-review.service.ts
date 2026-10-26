@@ -6,22 +6,27 @@ import {
   InjectModel,
   Model,
   Redis,
+  TypeReviewT,
 } from 'cms-lib-database';
 import { OK_200, RolesIdEnum } from 'cms-lib-resources';
-import { NotifyI } from '@modules/notify/dto/notify.dto.js';
 import { PageI, PageMongoI } from '@modules/pages/dto/page.dto.js';
 import { PagesService } from '@modules/pages/services/pages.service.js';
+import {
+  TemplateI,
+  TemplateMongoI,
+} from '@modules/templates/dto/template.dto.js';
 import { LanguageRepository } from '@modules/languages/repositories/language.repository.js';
-import { PermissionSitieRepository } from '@shared/repositories/permission-sitie.repository.js';
+import { NotifyGateway } from '@modules/notify/services/notify.gateway.js';
+import { TemplatesService } from '@modules/templates/services/templates.service.js';
+import { SitieRepository } from '@modules/sitie/repositories/sitie.repository.js';
 import { ReferenceRepository } from '@shared/repositories/reference.repository.js';
+import { createNotify } from '@shared/helpers/notify.helper.js';
 import {
   GetallDto,
   ReviewPageDataI,
   ReviewPageDto,
 } from '../dto/page-review.dto.js';
 import { PageReviewRepository } from '../repositories/pages-review.repository.js';
-import { NotifyRepository } from '@modules/notify/repositories/notify.repository.js';
-import { NotifyGateway } from '@modules/notify/services/notify.gateway.js';
 
 moment.locale('es');
 moment.tz.setDefault('America/Guayaquil');
@@ -32,37 +37,41 @@ export class PagesReviewService {
     private readonly referenceRepository: ReferenceRepository,
     private readonly pageReviewRepository: PageReviewRepository,
     private readonly languageRepository: LanguageRepository,
-    private readonly permissionSitieRepository: PermissionSitieRepository,
-    private readonly notifyRepository: NotifyRepository,
+    private readonly sitieRepository: SitieRepository,
     private readonly notifyGateway: NotifyGateway,
     private readonly pageService: PagesService,
-    @InjectModel('Review')
+    private readonly templateService: TemplatesService,
+    @InjectModel('ReviewPages')
     private readonly pageReviewModel: Model<PageMongoI>,
     @InjectModel('Page')
     private readonly pageModel: Model<PageMongoI>,
+    @InjectModel('ReviewTemplates')
+    private readonly templateReviewModel: Model<TemplateMongoI>,
+    @InjectModel('Template')
+    private readonly templateModel: Model<TemplateMongoI>,
   ) {}
 
   async getAll(getallDto: GetallDto, userId: number) {
     return await this.pageReviewRepository.getAll(getallDto, userId);
   }
 
-  async findOne(pageReviewId: number, userId: number) {
+  async findOne(reviewId: number, userId: number) {
     const dataSource = Database.getConnection();
     return await dataSource.transaction(async (cnx) => {
       const pageReview = await this.pageReviewRepository.findForReview(
-        pageReviewId,
+        reviewId,
         cnx,
       );
       if (pageReview === undefined) {
         throw new HttpException(
-          'No se encontro datos de la página a revisar.',
+          'No se encontro datos de la revisión.',
           HttpStatus.BAD_REQUEST,
         );
       }
 
       if (pageReview.statusReview === 'pending') {
         await this.pageReviewRepository.updateReviewPage(
-          pageReviewId,
+          reviewId,
           {
             userReviewId: userId,
             statusReview: 'assigned',
@@ -70,7 +79,18 @@ export class PagesReviewService {
           cnx,
         );
       }
-      return this.pageService.findOne(pageReview.pageId);
+      let data: PageI | TemplateI;
+      if (pageReview.type === 'page') {
+        data = await this.pageService.findOne(pageReview.pageId!);
+      } else {
+        data = await this.templateService.findOne(pageReview.templateId!);
+      }
+      return {
+        id: pageReview.id,
+        status: pageReview.statusReview,
+        type: pageReview.type,
+        data,
+      };
     });
   }
 
@@ -98,121 +118,224 @@ export class PagesReviewService {
       const pageReview = await this.pageReviewRepository.findForReview(id, cnx);
       if (pageReview === undefined) {
         throw new HttpException(
-          'No se encontro datos de la revisión de la página',
+          'No se encontro datos de la revisión.',
           HttpStatus.BAD_REQUEST,
         );
       }
 
       if (reviewPageDto.status === 'approved') {
-        const contentPage = await this.pageReviewModel.findById(
-          pageReview.mongoId,
-        );
-
-        await this.pageModel.findByIdAndUpdate(
-          pageReview.mongoId,
-          { data: contentPage?.data },
-          { new: true },
-        );
-        await this.createOrUpdateRefFromReview(pageReview.pageId, cnx);
-
-        const languages = await this.languageRepository.get({
-          limit: 9999,
-          page: 1,
-          status: true,
-          search: null,
-        });
-        for (let lang of languages.records) {
-          await Redis.del(`page-${pageReview.id}-${lang.lang}`);
-        }
-
-        const page = await this.pageService.findOne(pageReview.pageId);
-        if (page === undefined) {
-          throw new HttpException(
-            'No se encontro datos de la página',
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-
-        for (let role of rolesByNotify) {
-          await this.createNotify(
-            page,
-            `Los cambios de la página ${page.name} fueron aprobados.`,
-            role,
-            pageReview,
-            cnx,
-          );
+        if (pageReview.type === 'page') {
+          await this.approvedPageReview(pageReview, rolesByNotify, cnx);
+        } else {
+          await this.approvedTemplateReview(pageReview, rolesByNotify, cnx);
         }
       } else {
-        const page = await this.pageService.findOne(pageReview.pageId);
-        if (page === undefined) {
-          throw new HttpException(
-            'No se encontro datos de la página',
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-        for (let role of rolesByNotify) {
-          await this.createNotify(
-            page,
-            `Los cambios de la página ${page.name} fueron rechazados.`,
-            role,
-            pageReview,
-            cnx,
-          );
+        if (pageReview.type === 'page') {
+          await this.rejectedPageReview(pageReview, rolesByNotify, cnx);
+        } else {
+          await this.rejectedTemplateReview(pageReview, rolesByNotify, cnx);
         }
       }
     });
     return OK_200;
   }
 
-  private async createNotify(
-    page: PageI,
+  private async notifyUsers(
+    rolesByNotify: number[],
+    entityId: number,
+    entityName: string,
+    sitieId: number,
+    micrositieId: number | null,
+    typeReview: TypeReviewT,
     message: string,
-    roleId: number,
-    reviewPageData: ReviewPageDataI,
     cnx: EntityManager,
   ) {
-    const { id, comment, statusReview, userReview, userChanges, pageId } =
-      reviewPageData;
-
-    let createNotifies: NotifyI[] = [];
-    const usersToNotifyData = await this.permissionSitieRepository.findByRole(
-      roleId,
-      page.sitieId,
-      page.micrositieId,
-    );
-    const usersToNotify = usersToNotifyData.map((item) => item.userId);
-    for (const userId of usersToNotify) {
-      const newNotify = {
+    for (let role of rolesByNotify) {
+      await createNotify(
+        entityId,
+        entityName,
+        sitieId,
+        micrositieId,
+        typeReview,
         message,
-        readStatus: false,
-        metadata: {
-          reviewId: id,
-          comment,
-          pageId,
-          entityName: page.name,
-          micrositieId: page.micrositieId,
-          statusReview,
-          userReview,
-          userChanges,
-        },
-        userId,
-      } as NotifyI;
-      const createNotify = await this.notifyRepository.create(newNotify, cnx);
-      newNotify.id = createNotify.id;
-      createNotifies.push(createNotify);
-    }
-
-    for (const notify of createNotifies) {
-      this.notifyGateway.sendToUser(notify.userId.toString(), notify);
+        role,
+        this.notifyGateway,
+        cnx,
+      );
     }
   }
 
-  private async createOrUpdateRefFromReview(
-    pageId: number,
+  private async approvedPageReview(
+    pageReview: ReviewPageDataI,
+    rolesByNotify: number[],
     cnx: EntityManager,
   ) {
-    const getAllRefReview =
-      await this.referenceRepository.getRefReviewByPageId(pageId);
+    const page = await this.pageService.findOne(pageReview.pageId!);
+    if (page === undefined) {
+      throw new HttpException(
+        'No se encontro datos de la página',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const contentPage = await this.pageReviewModel.findById(pageReview.mongoId);
+    await this.pageModel.findByIdAndUpdate(
+      page.mongoId,
+      { data: contentPage?.data },
+      { new: true },
+    );
+    await this.createOrUpdateRefFromReview(
+      pageReview.pageId!,
+      pageReview.type,
+      cnx,
+    );
+
+    const languages = await this.languageRepository.get({
+      limit: 9999,
+      page: 1,
+      status: true,
+      search: null,
+    });
+    for (let lang of languages.records) {
+      await Redis.del(`page-${pageReview.pageId}-${lang.lang}`);
+    }
+
+    await this.notifyUsers(
+      rolesByNotify,
+      page.id,
+      page.name,
+      page.sitieId,
+      page.micrositieId,
+      pageReview.type,
+      `Los cambios de la página ${page.name} fueron aprobados.`,
+      cnx,
+    );
+  }
+
+  private async approvedTemplateReview(
+    pageReview: ReviewPageDataI,
+    rolesByNotify: number[],
+    cnx: EntityManager,
+  ) {
+    const template = await this.templateService.findOne(pageReview.templateId!);
+    if (template === undefined) {
+      throw new HttpException(
+        'No se encontro datos de la plantilla',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const contentPage = await this.templateReviewModel.findById(
+      pageReview.mongoId,
+    );
+
+    await this.templateModel.findByIdAndUpdate(
+      template.mongoId,
+      { data: contentPage?.data },
+      { new: true },
+    );
+    await this.createOrUpdateRefFromReview(
+      pageReview.templateId!,
+      pageReview.type,
+      cnx,
+    );
+
+    const languages = await this.languageRepository.get({
+      limit: 9999,
+      page: 1,
+      status: true,
+      search: null,
+    });
+    for (let lang of languages.records) {
+      await Redis.del(`template-${pageReview.templateId}-${lang.lang}`);
+    }
+
+    const sitie = await this.sitieRepository.find();
+    if (sitie === undefined) {
+      throw new HttpException(
+        'No se encontro datos del sitio',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    await this.notifyUsers(
+      rolesByNotify,
+      template.id,
+      template.name,
+      sitie.id!,
+      null,
+      pageReview.type,
+      `Los cambios de la plantilla ${template.name} fueron aprobados.`,
+      cnx,
+    );
+  }
+
+  private async rejectedPageReview(
+    pageReview: ReviewPageDataI,
+    rolesByNotify: number[],
+    cnx: EntityManager,
+  ) {
+    const page = await this.pageService.findOne(pageReview.pageId!);
+    if (page === undefined) {
+      throw new HttpException(
+        'No se encontro datos de la página',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    await this.notifyUsers(
+      rolesByNotify,
+      page.id,
+      page.name,
+      page.sitieId,
+      page.micrositieId,
+      pageReview.type,
+      `Los cambios de la página ${page.name} fueron rechazados.`,
+      cnx,
+    );
+  }
+
+  private async rejectedTemplateReview(
+    pageReview: ReviewPageDataI,
+    rolesByNotify: number[],
+    cnx: EntityManager,
+  ) {
+    const template = await this.templateService.findOne(pageReview.templateId!);
+    if (template === undefined) {
+      throw new HttpException(
+        'No se encontro datos de la plantilla',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const sitie = await this.sitieRepository.find();
+    if (sitie === undefined) {
+      throw new HttpException(
+        'No se encontro datos del sitio',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    await this.notifyUsers(
+      rolesByNotify,
+      template.id,
+      template.name,
+      sitie.id!,
+      null,
+      pageReview.type,
+      `Los cambios de la plantilla ${template.name} fueron rechazados.`,
+      cnx,
+    );
+  }
+
+  private async createOrUpdateRefFromReview(
+    entityId: number,
+    typeReview: TypeReviewT,
+    cnx: EntityManager,
+  ) {
+    const getAllRefReview = await this.referenceRepository.getRefReviewByPageId(
+      entityId,
+      typeReview,
+    );
     for (let refReview of getAllRefReview) {
       const findReference = await this.referenceRepository.find(
         refReview.ref,
@@ -225,7 +348,9 @@ export class PagesReviewService {
             languageId: refReview.languageId,
             ref: refReview.ref,
             text: refReview.text,
-            pageId,
+            type: typeReview,
+            pageId: typeReview === 'page' ? entityId : null,
+            templateId: typeReview === 'template' ? entityId : null,
           },
           cnx,
         );
@@ -235,7 +360,9 @@ export class PagesReviewService {
             languageId: findReference.languageId,
             ref: findReference.ref,
             text: refReview.text,
-            pageId,
+            type: typeReview,
+            pageId: typeReview === 'page' ? entityId : null,
+            templateId: typeReview === 'template' ? entityId : null,
           },
           cnx,
         );

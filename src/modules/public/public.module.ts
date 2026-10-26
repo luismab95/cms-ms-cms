@@ -25,10 +25,13 @@ import { PublicController } from './controllers/public.controller.js';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: 'Page', schema: PageSchema }]),
-    MongooseModule.forFeature([{ name: 'Template', schema: TemplateSchema }]),
-    MongooseModule.forFeature([{ name: 'Visit', schema: VisitSchema }]),
-    MongooseModule.forFeature([{ name: 'Review', schema: PageSchema }]),
+    MongooseModule.forFeature([
+      { name: 'Template', schema: TemplateSchema },
+      { name: 'Page', schema: PageSchema },
+      { name: 'Visit', schema: VisitSchema },
+      { name: 'ReviewPages', schema: PageSchema },
+      { name: 'ReviewTemplates', schema: TemplateSchema },
+    ]),
   ],
   controllers: [PublicController],
   providers: [
@@ -47,7 +50,7 @@ import { PublicController } from './controllers/public.controller.js';
     NotifyRepository,
     NotifyGateway,
     ParameterRepository,
-    PageReviewRepository
+    PageReviewRepository,
   ],
 })
 export class PublicModule {}

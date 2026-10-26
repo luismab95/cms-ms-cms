@@ -12,7 +12,6 @@ import {
 } from 'class-validator';
 import { PaginationResquestDto } from 'cms-lib-resources';
 import { Document } from 'cms-lib-database';
-import type { PageReviewStatus } from 'cms-lib-database';
 import { SectionI } from '@shared/interfaces/page.interface.js';
 import { ReferenceI } from '@shared/interfaces/reference.interface.js';
 import { ReviewPageDataI } from '@modules/page-review/dto/page-review.dto.js';

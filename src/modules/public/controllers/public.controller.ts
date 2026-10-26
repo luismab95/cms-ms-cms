@@ -44,7 +44,7 @@ export class PublicController {
       );
     }
 
-    let template = await this.templatesService.findOne(sitie.templateId);
+    let template = null;
 
     let micrositieId: number | null = null;
     if (GetallDto.micrositie) {
@@ -52,7 +52,6 @@ export class PublicController {
         GetallDto.micrositie,
         'path',
       );
-      template = await this.templatesService.findOne(micrositie.templateId);
       if (!micrositie || !micrositie.status) {
         throw new HttpException(
           'Sitio en mantenimiento',
@@ -60,6 +59,15 @@ export class PublicController {
         );
       }
       micrositieId = micrositie.id!;
+      template = await this.templatesService.getTemplate(
+        GetallDto.lang,
+        micrositie.templateId,
+      );
+    } else {
+      template = await this.templatesService.getTemplate(
+        GetallDto.lang,
+        sitie.templateId,
+      );
     }
 
     const page = await this.pagesService.getPage(

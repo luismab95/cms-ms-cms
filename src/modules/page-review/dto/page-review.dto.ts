@@ -5,24 +5,41 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import type { PageReviewStatus, ReviewCommentI } from 'cms-lib-database';
-import { PageDataMongoI, PageI } from '@modules/pages/dto/page.dto.js';
+import type {
+  PageReviewStatusT,
+  ReviewCommentI,
+  TypeReviewT,
+} from 'cms-lib-database';
 import { PaginationResquestDto } from 'cms-lib-resources';
+import { PageDataMongoI, PageI } from '@modules/pages/dto/page.dto.js';
+import {
+  TemplateDataMongoI,
+  TemplateI,
+} from '@modules/templates/dto/template.dto.js';
+
+export interface ReviewEntityI {
+  id: number;
+  status: PageReviewStatusT;
+  type: TypeReviewT;
+  data: PageI | TemplateI;
+}
 
 export interface ReviewPageDataI extends Partial<
   Pick<PageI, 'name' | 'path' | 'status'>
 > {
   id: number;
-  pageId: number;
+  pageId: number | null;
+  templateId: number | null;
   comment: string;
+  type: TypeReviewT;
   comments: ReviewCommentI[];
   mongoId: string;
-  statusReview: PageReviewStatus;
+  statusReview: PageReviewStatusT;
   userChangesId: number;
   userReviewId: number;
   userReview?: string;
   userChanges?: string;
-  dataReview?: PageDataMongoI;
+  dataReview?: PageDataMongoI | TemplateDataMongoI;
 }
 
 export class ReviewPageDto {
@@ -35,7 +52,7 @@ export class ReviewPageDto {
 
   @IsString({ message: 'Estado debe ser texto' })
   @IsNotEmpty({ message: 'Estado es requerido' })
-  status: PageReviewStatus;
+  status: PageReviewStatusT;
 }
 
 export class GetallDto extends PaginationResquestDto {
@@ -43,5 +60,5 @@ export class GetallDto extends PaginationResquestDto {
     message: 'Estado de revisión no válido',
   })
   @IsOptional()
-  statusReview?: PageReviewStatus | null;
+  statusReview?: PageReviewStatusT | null;
 }

@@ -4,6 +4,7 @@ import {
   Reference,
   Database,
   ReferenceReview,
+  TypeReviewT,
 } from 'cms-lib-database';
 import { errorQuery, ColumnsEnum } from 'cms-lib-resources';
 import {
@@ -129,7 +130,8 @@ export class ReferenceRepository {
   async findRefReview(
     ref: string,
     languageId: number,
-    pageId: number,
+    typeReview: TypeReviewT,
+    entityId: number,
   ): Promise<ReferenceReviewI | undefined> {
     const dataSource = Database.getConnection();
     const query = dataSource
@@ -142,11 +144,23 @@ export class ReferenceRepository {
       .from(ReferenceReview, 'rr')
       .where('rr.ref = :ref', { ref })
       .andWhere('rr.language_id = :languageId', { languageId })
-      .andWhere('rr.page_id = :pageId', { pageId });
+      .andWhere('rr.type = :typeReview', { typeReview });
+
+    if (typeReview === 'page') {
+      query.andWhere('rr.page_id = :pageId', { pageId: entityId });
+    }
+
+    if (typeReview === 'template') {
+      query.andWhere('rr.template_id = :templateId', { templateId: entityId });
+    }
+
     return await query.getRawOne<ReferenceReviewI>();
   }
 
-  async getRefReviewByPageId(pageId: number): Promise<ReferenceReviewI[]> {
+  async getRefReviewByPageId(
+    entityId: number,
+    typeReview: TypeReviewT,
+  ): Promise<ReferenceReviewI[]> {
     const dataSource = Database.getConnection();
     const query = dataSource
       .createQueryBuilder()
@@ -155,8 +169,13 @@ export class ReferenceRepository {
         'rr.language_id as "languageId"',
         'rr.text as "text"',
       ])
-      .from(ReferenceReview, 'rr')
-      .where('rr.page_id = :pageId', { pageId });
+      .from(ReferenceReview, 'rr');
+
+    if (typeReview === 'page') {
+      query.where('rr.page_id = :pageId', { pageId: entityId });
+    } else {
+      query.where('rr.template_id = :templateId', { templateId: entityId });
+    }
     return await query.getRawMany<ReferenceReviewI>();
   }
 

@@ -1,5 +1,12 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { Database, Template, PermissionSitie } from 'cms-lib-database';
+import {
+  Database,
+  Template,
+  PermissionSitie,
+  EntityManager,
+  Sitie,
+  Micrositie,
+} from 'cms-lib-database';
 import {
   errorQuery,
   ColumnsEnum,
@@ -29,9 +36,9 @@ export class TemplateRepository {
   async update(
     templateId: number,
     template: UpdateTemplateDto,
+    dataSource: EntityManager,
   ): Promise<number> {
     try {
-      const dataSource = Database.getConnection();
       const update = await dataSource
         .createQueryBuilder()
         .update(Template)
@@ -59,6 +66,47 @@ export class TemplateRepository {
       .from(Template, 't')
       .where(`t.${field} = :value`, { value });
     return query.getRawOne<TemplateI>();
+  }
+
+  async findActives(templateId: number): Promise<TemplateI[]> {
+    const dataSource = Database.getConnection();
+    const querySities = dataSource
+      .createQueryBuilder()
+      .select(['s.name as "nameEntity"'])
+      .from(Template, 't')
+      .innerJoin(
+        Sitie,
+        's',
+        's.template_id = :templateId and s.status = :status',
+        { templateId, status: true },
+      )
+      .where(`t.id = :templateId`, { templateId });
+
+    const queryMicrosities = dataSource
+      .createQueryBuilder()
+      .select(['ms.name as "nameEntity"'])
+      .from(Template, 't')
+      .innerJoin(
+        Sitie,
+        's',
+        's.template_id = :templateId and s.status = :status',
+        { templateId, status: true },
+      )
+      .innerJoin(
+        Micrositie,
+        'ms',
+        'ms.template_id = :templateId and ms.status = :status',
+        {
+          templateId,
+          status: true,
+        },
+      )
+      .where(`t.id = :templateId`, { templateId });
+
+    const sities = await querySities.getRawMany<TemplateI>();
+    const microsities = await queryMicrosities.getRawMany<TemplateI>();
+
+    return [...sities, ...microsities];
   }
 
   async get(

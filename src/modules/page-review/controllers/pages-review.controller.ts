@@ -16,11 +16,13 @@ import {
   ServiceResponseI,
   PaginationResponseI,
 } from 'cms-lib-resources';
+import { TemplateI } from '@modules/templates/dto/template.dto.js';
 import { PageI } from '@modules/pages/dto/page.dto.js';
 import {
   ReviewPageDataI,
   GetallDto,
   ReviewPageDto,
+  ReviewEntityI,
 } from '../dto/page-review.dto.js';
 import { PagesReviewService } from '../services/pages-review.service.js';
 
@@ -47,7 +49,7 @@ export class PagesReviewController {
   async findOneReview(
     @Param('id') id: string,
     @Req() req: Request,
-  ): Promise<ServiceResponseI<PageI>> {
+  ): Promise<ServiceResponseI<ReviewEntityI>> {
     const userId = (req as Request & { userId: number }).userId;
     return {
       message: await this.pagesReviewService.findOne(Number(id), userId),

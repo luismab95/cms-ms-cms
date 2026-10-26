@@ -8,22 +8,21 @@ import {
   Micrositie,
   User,
   DataSource,
+  TypeReviewT,
+  Template,
+  Brackets,
 } from 'cms-lib-database';
 import {
   errorQuery,
   ColumnsEnum,
   PaginationResponseI,
-  queryFilter,
 } from 'cms-lib-resources';
-import {
-  ReviewPageDto,
-  ReviewPageDataI,
-  GetallDto,
-} from '../dto/page-review.dto.js';
+import { ReviewPageDataI, GetallDto } from '../dto/page-review.dto.js';
 
 export class PageReviewRepository {
   async findPageReview(
-    pageId: number,
+    entityId: number,
+    typeReview: TypeReviewT,
     dataSource: EntityManager | null | DataSource,
   ): Promise<ReviewPageDataI | undefined> {
     if (dataSource === null) dataSource = Database.getConnection();
@@ -33,9 +32,11 @@ export class PageReviewRepository {
         'pr.id as "id"',
         'pr.mongo_id as "mongoId"',
         'pr.page_id as "pageId"',
+        `pr.template_id AS "templateId"`,
         'pr.comment as "comment"',
         'pr.comments as "comments"',
         'pr.status_review as "statusReview"',
+        'pr.type as "type"',
         'uc.id as "userChangesId"',
         'ur.id as "userReviewId"',
         `CONCAT(uc.firstname, ' ', uc.lastname) as "userChanges"`,
@@ -44,8 +45,17 @@ export class PageReviewRepository {
       .from(PageReview, 'pr')
       .innerJoin(User, 'uc', 'uc.id = pr.user_changes_id')
       .leftJoin(User, 'ur', 'ur.id = pr.user_review_id')
-      .where(`pr.pageId = :pageId`, { pageId })
-      .orderBy('pr.id', 'DESC');
+      .where('pr.type = :typeReview', { typeReview });
+
+    if (typeReview === 'page') {
+      query.andWhere(`pr.page_id = :pageId`, { pageId: entityId });
+    }
+
+    if (typeReview === 'template') {
+      query.andWhere(`pr.template_id = :templateId`, { templateId: entityId });
+    }
+
+    query.orderBy('pr.id', 'DESC');
 
     return query.getRawOne<ReviewPageDataI>();
   }
@@ -56,12 +66,15 @@ export class PageReviewRepository {
   ): Promise<ReviewPageDataI> {
     try {
       const pageReviewRepository = dataSource.getRepository(PageReview);
-      const { pageId, statusReview, userChangesId, mongoId } = reviewPage;
+      const { pageId, statusReview, userChangesId, mongoId, type, templateId } =
+        reviewPage;
       const newPageReview = {
         mongoId,
         comment: '',
         statusReview,
         pageId,
+        templateId,
+        type,
         userChangesId,
       } as PageReview;
       return (await pageReviewRepository.save(
@@ -100,41 +113,89 @@ export class PageReviewRepository {
     let query = dataSource
       .createQueryBuilder()
       .select([
-        'p.name as name',
-        'p.path as path',
-        'p.status as status',
-        'pr.page_id as "pageId"',
-        'pr.id as "id"',
-        'pr.comment as "comment"',
-        'pr.status_review as "statusReview"',
-        `CONCAT(uc.firstname, ' ', uc.lastname) as "userChanges"`,
-        `CONCAT(ur.firstname, ' ', ur.lastname) as "userReview"`,
+        `CASE
+          WHEN pr.type = 'page' THEN p.name
+          ELSE t.name
+        END AS "name"`,
+        `CASE
+          WHEN pr.type = 'page' THEN p.status
+          ELSE t.status
+        END AS "status"`,
+        `CASE
+          WHEN pr.type = 'page' AND p.micrositie_id IS NOT NULL
+            THEN CONCAT(ms.path, '/', p.path)
+          WHEN pr.type = 'page'
+            THEN CONCAT('/', p.path)
+          ELSE NULL
+        END AS "path"`,
+        `pr.page_id AS "pageId"`,
+        `pr.template_id AS "templateId"`,
+        `pr.id AS "id"`,
+        `pr.comment AS "comment"`,
+        `pr.type AS "type"`,
+        `pr.status_review AS "statusReview"`,
+        `CONCAT(uc.firstname, ' ', uc.lastname) AS "userChanges"`,
+        `CONCAT(ur.firstname, ' ', ur.lastname) AS "userReview"`,
       ])
-      .from(Page, 'p')
-      .innerJoin(PageReview, 'pr', 'pr.page_id = p.id')
+      .from(PageReview, 'pr')
+      .leftJoin(Page, 'p', 'pr.page_id = p.id and p.status = :status', {
+        status: true,
+      })
+      .leftJoin(Template, 't', 'pr.template_id = t.id and t.status = :status', {
+        status: true,
+      })
       .innerJoin(User, 'uc', 'uc.id = pr.user_changes_id')
       .innerJoin(
         PermissionSitie,
         'ps',
         `(
-            (p.sitie_id IS NOT NULL AND ps.sitie_id = p.sitie_id)
-            OR
-            (p.micrositie_id IS NOT NULL AND ps.micrositie_id = p.micrositie_id)
+          (
+            pr.type = 'page'
+            AND (
+              (p.sitie_id IS NOT NULL AND ps.sitie_id = p.sitie_id)
+              OR
+              (p.micrositie_id IS NOT NULL AND ps.micrositie_id = p.micrositie_id)
+            )
           )
-          AND ps.user_id = :userId
-          AND ps.status = :status`,
-        { userId, status: true },
+          OR
+          (
+            pr.type = 'template'
+            AND ps.sitie_id = (
+              SELECT s.id
+              FROM public.sitie s
+              ORDER BY s.id DESC
+              LIMIT 1
+            )
+          )
+        )
+        AND ps.user_id = :userId
+        AND ps.status = :status`,
+        {
+          userId,
+          status: true,
+        },
       )
       .leftJoin(User, 'ur', 'ur.id = pr.user_review_id')
       .leftJoin(Micrositie, 'ms', 'ms.id = p.micrositie_id');
 
-    query = queryFilter(
-      query,
-      'p',
-      ['name', 'path'],
-      paginationRequest.status!,
-      paginationRequest.search,
-    );
+    if (
+      paginationRequest.search !== null &&
+      paginationRequest.search !== undefined
+    ) {
+      query.andWhere(
+        new Brackets((qb) => {
+          qb.where(`upper(p.name) like :search`, {
+            search: `%${paginationRequest.search!.toUpperCase()}%`,
+          });
+          qb.orWhere(`upper(p.path) like :search`, {
+            search: `%${paginationRequest.search!.toUpperCase()}%`,
+          });
+          qb.orWhere(`upper(t.name) like :search`, {
+            search: `%${paginationRequest.search!.toUpperCase()}%`,
+          });
+        }),
+      );
+    }
 
     if (paginationRequest.statusReview) {
       query.andWhere('pr.status_review = :statusReview', {
@@ -151,11 +212,14 @@ export class PageReviewRepository {
     const records = await query
       .groupBy('p.id')
       .addGroupBy('pr.id')
+      .addGroupBy('t.name')
+      .addGroupBy('t.status')
       .addGroupBy('ms.name')
       .addGroupBy('uc.firstname')
       .addGroupBy('uc.lastname')
       .addGroupBy('ur.firstname')
       .addGroupBy('ur.lastname')
+      .addGroupBy('ms.path')
       .orderBy('pr.id', 'DESC')
       .offset((paginationRequest.page - 1) * paginationRequest.limit)
       .limit(paginationRequest.limit)
@@ -171,7 +235,7 @@ export class PageReviewRepository {
   }
 
   async findForReview(
-    id: number,
+    reviewId: number,
     dataSource: EntityManager | null | DataSource,
   ): Promise<ReviewPageDataI | undefined> {
     if (dataSource === null) dataSource = Database.getConnection();
@@ -181,14 +245,16 @@ export class PageReviewRepository {
         'pr.id as "id"',
         'pr.mongo_id as "mongoId"',
         'pr.page_id as "pageId"',
+        `pr.template_id AS "templateId"`,
         'pr.comment as "comment"',
         'pr.comments as "comments"',
+        'pr.type as "type"',
         'pr.status_review as "statusReview"',
         `CONCAT(uc.firstname, ' ', uc.lastname) as "userChanges"`,
         `CONCAT(ur.firstname, ' ', ur.lastname) as "userReview"`,
       ])
       .from(PageReview, 'pr')
-      .where(`pr.id = :id`, { id })
+      .where(`pr.id = :reviewId`, { reviewId })
       .innerJoin(User, 'uc', 'uc.id = pr.user_changes_id')
       .leftJoin(User, 'ur', 'ur.id = pr.user_review_id');
 

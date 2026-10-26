@@ -1,31 +1,23 @@
 import { Injectable, Inject, HttpException, HttpStatus } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import moment from 'moment-timezone';
-import {
-  InjectModel,
-  Model,
-  Database,
-  EntityManager,
-  Redis,
-} from 'cms-lib-database';
-import { OK_200, randomCharacters, RolesIdEnum } from 'cms-lib-resources';
+import { InjectModel, Model, Database, Redis } from 'cms-lib-database';
+import { OK_200, RolesIdEnum } from 'cms-lib-resources';
 import { VisitMongoI } from '@modules/dashboard/dto/dashboard.dto.js';
-import { NotifyRepository } from '@modules/notify/repositories/notify.repository.js';
-import { NotifyGateway } from '@modules/notify/services/notify.gateway.js';
 import { LanguageRepository } from '@modules/languages/repositories/language.repository.js';
 import { PageReviewRepository } from '@modules/page-review/repositories/pages-review.repository.js';
 import { ReviewPageDataI } from '@modules/page-review/dto/page-review.dto.js';
-import { NotifyI } from '@modules/notify/dto/notify.dto.js';
-import { createPage } from '@shared/helpers/page.helper.js';
-import { ColumnI } from '@shared/interfaces/page.interface.js';
+import { NotifyGateway } from '@modules/notify/services/notify.gateway.js';
+import { createNotify } from '@shared/helpers/notify.helper.js';
 import {
-  ReferenceI,
-  ReferenceReviewI,
-} from '@shared/interfaces/reference.interface.js';
+  createPage,
+  replaceRefText,
+  saveRefText,
+} from '@shared/helpers/page.helper.js';
+import { ReferenceI } from '@shared/interfaces/reference.interface.js';
 import { ReferenceRepository } from '@shared/repositories/reference.repository.js';
 import {
   CreatePageDto,
-  ElementDataI,
   GetallDto,
   GetPageParamsDto,
   PageDataMongoI,
@@ -34,7 +26,6 @@ import {
   UpdatePageDto,
 } from '../dto/page.dto.js';
 import { PageRepository } from '../repositories/page.repository.js';
-import { PermissionSitieRepository } from '@shared/repositories/permission-sitie.repository.js';
 
 moment.locale('es');
 moment.tz.setDefault('America/Guayaquil');
@@ -43,15 +34,13 @@ moment.tz.setDefault('America/Guayaquil');
 export class PagesService {
   constructor(
     private readonly pageRepository: PageRepository,
-    private readonly permissionSitieRepository: PermissionSitieRepository,
     private readonly pageReviewRepository: PageReviewRepository,
     private readonly referenceRepository: ReferenceRepository,
     private readonly languageRepository: LanguageRepository,
-    private readonly notifyRepository: NotifyRepository,
     private readonly notifyGateway: NotifyGateway,
     @InjectModel('Page')
     private readonly pageModel: Model<PageMongoI>,
-    @InjectModel('Review')
+    @InjectModel('ReviewPages')
     private readonly pageReviewModel: Model<PageMongoI>,
     @InjectModel('Visit')
     private readonly visitModel: Model<VisitMongoI>,
@@ -88,7 +77,8 @@ export class PagesService {
     const pageMongo = (await this.pageModel.findById(
       page.mongoId,
     )) as PageMongoI;
-    page.data = await this.replaceRefText(pageMongo.data, 'current');
+    const content = await replaceRefText(pageMongo.data.body, 'current');
+    page.data = { body: content };
 
     const languages = await this.languageRepository.get({
       limit: 9999,
@@ -119,6 +109,7 @@ export class PagesService {
 
     const pageReview = await this.pageReviewRepository.findPageReview(
       page.id,
+      'page',
       null,
     );
 
@@ -136,92 +127,94 @@ export class PagesService {
       const pageReviewMongo = (await this.pageReviewModel.findById(
         pageReview?.mongoId,
       )) as PageMongoI;
-      page.reviewPage.data!.dataReview = await this.replaceRefText(
-        pageReviewMongo.data,
+      const contentReview = await replaceRefText(
+        pageReviewMongo.data.body,
         'review',
       );
+      page.reviewPage.data!.dataReview = { body: contentReview };
     }
     return page;
   }
 
   async update(id: number, updatePageDto: UpdatePageDto) {
-    try {
-      const page = await this.findOne(id);
+    const page = await this.findOne(id);
+    if (
+      page.reviewPage?.review &&
+      page.reviewPage?.data?.statusReview !== 'rejected'
+    ) {
+      throw new HttpException(
+        'No se pudo actualizar el contenido de la página, esta se encuentra en modo revisión.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
-      if (page.reviewPage?.review && page.reviewPage?.data?.statusReview !== 'rejected') {
-        throw new HttpException(
-          'No se pudo actualizar el contenido de la página, esta se encuentra en modo revisión.',
-          HttpStatus.BAD_REQUEST,
-        );
+    const dataSource = Database.getConnection();
+    await dataSource.transaction(async (cnx) => {
+      if (updatePageDto.data) {
+        const dataPage = updatePageDto.data as PageDataMongoI;
+        const getRefText = await saveRefText(dataPage.body, id, 'page', cnx);
+
+        const createdPageReview = new this.pageReviewModel({
+          data: { body: getRefText },
+        });
+        const pageReviewData = await createdPageReview.save();
+
+        if (!pageReviewData) {
+          throw new HttpException(
+            'No se pudo actualizar el contenido de la página',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        delete updatePageDto.data;
+        await this.deleteDraft(id);
+        const newPageReview = {
+          pageId: id,
+          userChangesId: this.request.userId,
+          statusReview: 'pending',
+          mongoId: String(pageReviewData._id),
+          type: 'page',
+        } as ReviewPageDataI;
+
+        await this.pageReviewRepository.createReviewPage(newPageReview, cnx);
+        const rolesByNotify: number[] = [RolesIdEnum.review, RolesIdEnum.admin];
+        for (let role of rolesByNotify) {
+          await createNotify(
+            page.id,
+            page.name,
+            page.sitieId,
+            page.micrositieId,
+            'page',
+            `La página ${page.name} tiene cambios pendientes por revisar.`,
+            role,
+            this.notifyGateway,
+            cnx,
+          );
+        }
       }
 
-      const dataSource = Database.getConnection();
-      await dataSource.transaction(async (cnx) => {
-        if (updatePageDto.data) {
-          const getRefText = await this.saveRefText(updatePageDto, id);
-
-          const createdPageReview = new this.pageReviewModel(getRefText);
-          const pageReviewData = await createdPageReview.save();
-
-          if (!pageReviewData) {
-            throw new HttpException(
-              'No se pudo actualizar el contenido de la página',
-              HttpStatus.BAD_REQUEST,
-            );
-          }
-
-          delete updatePageDto.data;
-          await this.deleteDraft(id);
-          const newPageReview = {
-            pageId: id,
-            userChangesId: this.request.userId,
-            statusReview: 'pending',
-            mongoId: String(pageReviewData._id),
-          } as ReviewPageDataI;
-
-          await this.pageReviewRepository.createReviewPage(newPageReview, cnx);
-          const rolesByNotify: number[] = [
-            RolesIdEnum.review,
-            RolesIdEnum.admin,
-          ];
-          for (let role of rolesByNotify) {
-            await this.createNotify(
-              page,
-              `La página ${page.name} tiene cambios pendientes por revisar.`,
-              role,
+      if (updatePageDto.detail) {
+        for (let detail of updatePageDto.detail) {
+          for (let reference of detail.references!) {
+            await this.referenceRepository.update(
+              {
+                languageId: detail.lang,
+                ref: reference.ref,
+                text: reference.value,
+                type: 'page',
+                pageId: id,
+                templateId: null,
+              },
               cnx,
             );
           }
         }
+        delete updatePageDto.detail;
+      }
+      await this.pageRepository.update(id, updatePageDto, cnx);
+    });
 
-        if (updatePageDto.detail) {
-          for (let detail of updatePageDto.detail) {
-            for (let reference of detail.references!) {
-              await this.referenceRepository.update(
-                {
-                  languageId: detail.lang,
-                  ref: reference.ref,
-                  text: reference.value,
-                  pageId: id,
-                },
-                cnx,
-              );
-            }
-          }
-          delete updatePageDto.detail;
-        }
-        await this.pageRepository.update(id, updatePageDto, cnx);
-      });
-
-      return await this.findOne(id);
-    } catch (error) {
-      console.log(error);
-      
-      throw new HttpException(
-        'No se pudo actualizar la informaciòn de la página.',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    return await this.findOne(id);
   }
 
   async remove(id: number) {
@@ -251,125 +244,6 @@ export class PagesService {
     const userId = this.request.userId;
     await Redis.del(`page-draft-${id}-${userId}`);
     return this.findOne(id);
-  }
-
-  private async saveRefText(updatePageDto: UpdatePageDto, pageId: number) {
-    const dataSource = Database.getConnection();
-
-    const pageData = updatePageDto.data as PageDataMongoI;
-
-    await dataSource.transaction(async (cnx) => {
-      for (const section of pageData.body['data']) {
-        for (const row of section.rows) {
-          for (const column of row.columns) {
-            if (column.element === null) continue;
-            if (!column.element?.dataText) continue;
-            const textRefs: string[] = [];
-            Object.keys(column.element.text).forEach((key) => {
-              textRefs.push(key);
-            });
-            for (const textRef of textRefs) {
-              const findReference = await this.referenceRepository.getRefReview(
-                column.element.text[textRef],
-              );
-              if (findReference.length === 0) {
-                const ref = randomCharacters('COMBINED', 16);
-                column.element.text[textRef] = ref;
-              }
-            }
-            for (const language of column.element.dataText) {
-              const updatePromises = Object.keys(language)
-                .filter((key) => key !== 'languageId')
-                .map((key) =>
-                  this.createOrUpdateRef(column, key, cnx, language, pageId),
-                );
-
-              await Promise.all(updatePromises);
-            }
-            delete column.element.dataText;
-          }
-        }
-      }
-    });
-
-    return updatePageDto;
-  }
-
-  private async createOrUpdateRef(
-    column: ColumnI,
-    key: string,
-    cnx: EntityManager,
-    language: ElementDataI,
-    pageId: number,
-  ) {
-    const findReferenceLanguage = await this.referenceRepository.findRefReview(
-      column.element.text[key],
-      Number(language['languageId']),
-      pageId,
-    );
-
-    if (!findReferenceLanguage) {
-      await this.referenceRepository.createRefReview(
-        {
-          languageId: Number(language['languageId']),
-          ref: column.element.text[key],
-          text: language[key],
-          pageId,
-        },
-        cnx,
-      );
-    } else {
-      await this.referenceRepository.updateRefReview(
-        {
-          languageId: Number(language['languageId']),
-          ref: column.element.text[key],
-          text: language[key],
-          pageId,
-        },
-        cnx,
-      );
-    }
-
-    return column;
-  }
-
-  private async replaceRefText(
-    data: PageDataMongoI,
-    state: 'current' | 'review',
-  ) {
-    data = JSON.parse(JSON.stringify(data));
-    for (const section of data.body['data']) {
-      for (const row of section.rows) {
-        for (const column of row.columns) {
-          if (column.element === null) continue;
-          const textRefs: string[] = [];
-          Object.keys(column.element.text).forEach((key) => {
-            textRefs.push(key);
-          });
-          column.element.dataText = [];
-          for (const textRef of textRefs) {
-            let findReference: ReferenceI[] | ReferenceReviewI[] | null = null;
-            if (state === 'current') {
-              findReference = await this.referenceRepository.get(
-                column.element.text[textRef],
-              );
-            } else {
-              findReference = await this.referenceRepository.getRefReview(
-                column.element.text[textRef],
-              );
-            }
-            findReference.forEach((reference) => {
-              column.element.dataText?.push({
-                languageId: reference.languageId.toString(),
-                [textRef]: reference.text,
-              });
-            });
-          }
-        }
-      }
-    }
-
-    return data;
   }
 
   async getPage(
@@ -422,7 +296,9 @@ export class PagesService {
     const pageMongo = (await this.pageModel.findById(
       page.mongoId,
     )) as PageMongoI;
-    page.data = await this.replaceRefText(pageMongo.data, 'current');
+    const content = await replaceRefText(pageMongo.data.body, 'current');
+    page.data = { body: content };
+
     const languages = await this.languageRepository.get({
       limit: 9999,
       page: 1,
@@ -481,59 +357,5 @@ export class PagesService {
     });
 
     await createdVisitPage.save();
-  }
-
-  private async createNotify(
-    page: PageI,
-    message: string,
-    roleId: number,
-    cnx: EntityManager,
-  ) {
-    const reviewPageData = await this.pageReviewRepository.findPageReview(
-      page.id,
-      cnx,
-    );
-    if (!reviewPageData) {
-      throw new HttpException(
-        'Datos de revision no encontrados',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
-    const { id, comment, statusReview, userReview, userChanges, pageId } =
-      reviewPageData;
-
-    let createNotifies: NotifyI[] = [];
-    const usersToNotifyData = await this.permissionSitieRepository.findByRole(
-      roleId,
-      page.sitieId,
-      page.micrositieId,
-    );
-    const usersToNotify = usersToNotifyData.map((item) => item.userId);
-
-    for (const userId of usersToNotify) {
-      const newNotify = {
-        message,
-        readStatus: false,
-        metadata: {
-          reviewId: id,
-          comment,
-          pageId,
-          entityName: page.name,
-          micrositieId: page.micrositieId,
-          statusReview,
-          userReview,
-          userChanges,
-        },
-        userId,
-      } as NotifyI;
-      const createNotify = await this.notifyRepository.create(newNotify, cnx);
-      newNotify.id = createNotify.id;
-      createNotifies.push(createNotify);
-    }
-
-    for (const notify of createNotifies) {
-      this.notifyGateway.sendToUser(notify.userId.toString(), notify);
-    }
   }
 }

@@ -8,6 +8,10 @@ import {
 } from 'class-validator';
 import { Document } from 'cms-lib-database';
 import { SectionI } from '@shared/interfaces/page.interface.js';
+import {
+  PageDetailReferenceI,
+  ReviewPageI,
+} from '@modules/pages/dto/page.dto.js';
 
 export class CreateTemplateDto {
   @IsString({ message: 'Nombre debe ser texto' })
@@ -42,7 +46,7 @@ export class UpdateTemplateDto {
 
   @IsObject({ message: 'Contenido debe ser un objeto' })
   @IsOptional()
-  data?: TemplateMongoI;
+  data?: TemplateMongoI | TemplateDataMongoI;
 
   @IsOptional()
   @IsBoolean({ message: 'Estado no válido' })
@@ -57,6 +61,8 @@ export interface TemplateI {
   status: boolean;
   data?: TemplateDataMongoI;
   draft?: TemplateDataMongoI | null;
+  reviewTemplate?: ReviewPageI;
+  nameEntity?: string;
 }
 
 export interface TemplateNestedObjectI {
