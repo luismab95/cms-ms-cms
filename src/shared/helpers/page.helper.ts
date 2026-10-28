@@ -98,33 +98,45 @@ export async function replaceRefText(
   const referenceRepository = new ReferenceRepository();
 
   content = JSON.parse(JSON.stringify(content));
+
+  async function processElement(element: any): Promise<void> {
+    if (!element) return;
+
+    element.dataText = [];
+
+    for (const textRef of Object.keys(element.text ?? {})) {
+      let findReference: ReferenceI[] | ReferenceReviewI[] | null = null;
+
+      if (state === 'current') {
+        findReference = await referenceRepository.get(element.text[textRef]);
+      } else {
+        findReference = await referenceRepository.getRefReview(
+          element.text[textRef],
+        );
+      }
+
+      findReference?.forEach((reference) => {
+        element.dataText.push({
+          languageId: reference.languageId.toString(),
+          [textRef]: reference.text,
+        });
+      });
+    }
+
+    // Procesar los elementos hijos recursivamente
+    if (Array.isArray(element.childrens)) {
+      for (const children of element.childrens) {
+        await processElement(children);
+      }
+    }
+  }
+
   for (const section of content.data) {
     for (const row of section.rows) {
       for (const column of row.columns) {
         if (column.element === null) continue;
-        const textRefs: string[] = [];
-        Object.keys(column.element.text).forEach((key) => {
-          textRefs.push(key);
-        });
-        column.element.dataText = [];
-        for (const textRef of textRefs) {
-          let findReference: ReferenceI[] | ReferenceReviewI[] | null = null;
-          if (state === 'current') {
-            findReference = await referenceRepository.get(
-              column.element.text[textRef],
-            );
-          } else {
-            findReference = await referenceRepository.getRefReview(
-              column.element.text[textRef],
-            );
-          }
-          findReference.forEach((reference) => {
-            column.element.dataText?.push({
-              languageId: reference.languageId.toString(),
-              [textRef]: reference.text,
-            });
-          });
-        }
+
+        await processElement(column.element);
       }
     }
   }

@@ -22,6 +22,8 @@ export class ElementRepository {
         'e.config as config',
         'e.type as "type"',
         'e.text as "text"',
+        'e.kind as "kind"',
+        'e.children_schema as "childrenSchema"',
         'e.status as status',
       ])
       .from(ElementCMS, 'e');
@@ -35,7 +37,7 @@ export class ElementRepository {
     );
 
     const total = await query.getCount();
-    const records = await query
+    let records = await query
       .groupBy('e.id')
       .orderBy('e.id', 'DESC')
       .offset((paginationRequest.page - 1) * paginationRequest.limit)
@@ -43,11 +45,34 @@ export class ElementRepository {
       .getRawMany<ElementCMSI>();
     const totalPage = Math.ceil(total / paginationRequest.limit);
 
+    records = records.map((element) => this.buildChildren(element, records));
+
     return {
       records,
       total,
       page: Number(paginationRequest.page),
       totalPage,
+    };
+  }
+
+  private buildChildren(
+    element: ElementCMSI,
+    records: ElementCMSI[],
+  ): ElementCMSI {
+    const childrens: ElementCMSI[] = [];
+    if (element.kind === 'composite') {
+      element.childrenSchema.forEach((children) => {
+        const child = records.find((item) => item.id === children.elementId);
+
+        if (!child) return;
+
+        childrens.push(this.buildChildren(child, records));
+      });
+    }
+
+    return {
+      ...element,
+      childrens,
     };
   }
 }

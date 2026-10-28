@@ -1,4 +1,4 @@
-import { TypeElementEnum } from 'cms-lib-database';
+import { ChildrenSchemaI, ElementKindT } from 'cms-lib-database';
 
 export interface ElementCMSI {
   id: number;
@@ -13,5 +13,8 @@ export interface ElementCMSI {
     [key: string]: any;
   };
   status: boolean;
-  type: TypeElementEnum[];
+  type: any[];
+  kind: ElementKindT;
+  childrenSchema: ChildrenSchemaI[];
+  childrens: ElementCMSI[];
 }
