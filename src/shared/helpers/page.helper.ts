@@ -14,7 +14,7 @@ import {
   ReferenceI,
   ReferenceReviewI,
 } from '@shared/interfaces/reference.interface.js';
-import { ColumnI } from '@shared/interfaces/page.interface.js';
+import { ColumnI, ElementI } from '@shared/interfaces/page.interface.js';
 
 export async function createPage(
   createPageDto: CreatePageDto,
@@ -98,15 +98,12 @@ export async function replaceRefText(
   const referenceRepository = new ReferenceRepository();
 
   content = JSON.parse(JSON.stringify(content));
-
-  async function processElement(element: any): Promise<void> {
+  async function processElement(element: ElementI): Promise<void> {
     if (!element) return;
 
     element.dataText = [];
-
     for (const textRef of Object.keys(element.text ?? {})) {
       let findReference: ReferenceI[] | ReferenceReviewI[] | null = null;
-
       if (state === 'current') {
         findReference = await referenceRepository.get(element.text[textRef]);
       } else {
@@ -116,14 +113,13 @@ export async function replaceRefText(
       }
 
       findReference?.forEach((reference) => {
-        element.dataText.push({
+        element.dataText!.push({
           languageId: reference.languageId.toString(),
           [textRef]: reference.text,
         });
       });
     }
 
-    // Procesar los elementos hijos recursivamente
     if (Array.isArray(element.childrens)) {
       for (const children of element.childrens) {
         await processElement(children);
@@ -135,7 +131,6 @@ export async function replaceRefText(
     for (const row of section.rows) {
       for (const column of row.columns) {
         if (column.element === null) continue;
-
         await processElement(column.element);
       }
     }
@@ -153,52 +148,68 @@ export async function saveRefText(
   const referenceRepository = new ReferenceRepository();
 
   content = JSON.parse(JSON.stringify(content));
-  for (const section of content.data) {
-    for (const row of section.rows) {
-      for (const column of row.columns) {
-        if (column.element === null) continue;
-        if (!column.element?.dataText) continue;
-        const textRefs: string[] = [];
-        Object.keys(column.element.text).forEach((key) => {
-          textRefs.push(key);
-        });
-        for (const textRef of textRefs) {
-          const findReference = await referenceRepository.getRefReview(
-            column.element.text[textRef],
-          );
-          if (findReference.length === 0) {
-            const ref = randomCharacters('COMBINED', 16);
-            column.element.text[textRef] = ref;
-          }
+  async function processElement(element: ElementI): Promise<void> {
+    if (!element || !element.dataText) {
+      if (element?.childrens?.length) {
+        for (const children of element.childrens) {
+          await processElement(children);
         }
-        for (const language of column.element.dataText) {
-          const updatePromises = Object.keys(language)
-            .filter((key) => key !== 'languageId')
-            .map((key) =>
-              createOrUpdateRef(
-                key,
-                column,
-                language,
-                entityId,
-                typeReview,
-                referenceRepository,
-                cnx,
-              ),
-            );
+      }
+      return;
+    }
 
-          await Promise.all(updatePromises);
-        }
-        delete column.element.dataText;
+    const textRefs = Object.keys(element.text ?? {});
+    for (const textRef of textRefs) {
+      const findReference = await referenceRepository.getRefReview(
+        element.text[textRef],
+      );
+
+      if (findReference.length === 0) {
+        element.text[textRef] = randomCharacters('COMBINED', 16);
+      }
+    }
+
+    for (const language of element.dataText) {
+      const updatePromises = Object.keys(language)
+        .filter((key) => key !== 'languageId')
+        .map((key) =>
+          createOrUpdateRef(
+            key,
+            element,
+            language,
+            entityId,
+            typeReview,
+            referenceRepository,
+            cnx,
+          ),
+        );
+
+      await Promise.all(updatePromises);
+    }
+
+    delete element.dataText;
+
+    if (element.childrens?.length) {
+      for (const children of element.childrens) {
+        await processElement(children);
       }
     }
   }
 
+  for (const section of content.data) {
+    for (const row of section.rows) {
+      for (const column of row.columns) {
+        if (!column.element) continue;
+        await processElement(column.element);
+      }
+    }
+  }
   return content;
 }
 
 async function createOrUpdateRef(
   key: string,
-  column: ColumnI,
+  element: ElementI,
   language: ElementDataI,
   entityId: number,
   typeReview: TypeReviewT,
@@ -206,7 +217,7 @@ async function createOrUpdateRef(
   cnx: EntityManager,
 ) {
   const findReferenceLanguage = await referenceRepository.findRefReview(
-    column.element.text[key],
+    element.text[key],
     Number(language['languageId']),
     typeReview,
     entityId,
@@ -214,7 +225,7 @@ async function createOrUpdateRef(
 
   const createOrUpdateRef = {
     languageId: Number(language['languageId']),
-    ref: column.element.text[key],
+    ref: element.text[key],
     text: language[key],
     type: typeReview,
     pageId: typeReview === 'page' ? entityId : null,
@@ -227,5 +238,5 @@ async function createOrUpdateRef(
     await referenceRepository.updateRefReview(createOrUpdateRef, cnx);
   }
 
-  return column;
+  return element;
 }

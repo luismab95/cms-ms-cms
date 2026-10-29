@@ -82,10 +82,16 @@ export class PagesController {
     @Param('id') id: string,
     @Body() updatePageDto: UpdatePageDto,
   ): Promise<ServiceResponseI<PageI>> {
-    return {
-      message: await this.pagesService.update(Number(id), updatePageDto),
-      statusCode: HttpStatus.OK,
-    };
+    try {
+      return {
+        message: await this.pagesService.update(Number(id), updatePageDto),
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      console.log(error);
+
+      throw error;
+    }
   }
 
   @Delete('draft/:id')

@@ -15,10 +15,12 @@ export class ElementRepository {
       .createQueryBuilder()
       .select([
         'e.id as "id"',
+        'e.code as code',
         'e.name as name',
         'e.description as description',
         'e.icon as "icon"',
         'e.css as css',
+        'e.style as style',
         'e.config as config',
         'e.type as "type"',
         'e.text as "text"',
@@ -63,9 +65,8 @@ export class ElementRepository {
     if (element.kind === 'composite') {
       element.childrenSchema.forEach((children) => {
         const child = records.find((item) => item.id === children.elementId);
-
         if (!child) return;
-
+        child.style = children.style;
         childrens.push(this.buildChildren(child, records));
       });
     }
