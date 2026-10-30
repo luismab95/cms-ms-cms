@@ -62,12 +62,22 @@ export class ElementRepository {
     records: ElementCMSI[],
   ): ElementCMSI {
     const childrens: ElementCMSI[] = [];
-    if (element.kind === 'composite') {
-      element.childrenSchema.forEach((children) => {
-        const child = records.find((item) => item.id === children.elementId);
-        if (!child) return;
-        child.style = children.style;
-        childrens.push(this.buildChildren(child, records));
+
+    if (element.kind === 'composite' && element.childrenSchema?.length) {
+      element.childrenSchema.forEach((child) => {
+        const findChild = records.find((item) => item.id === child.elementId);
+        if (!findChild) return;
+        childrens.push(
+          this.buildChildren(
+            {
+              ...findChild,
+              style: child.style,
+              slot: child.slot,
+              childrenSchema: child.childrens ?? [],
+            },
+            records,
+          ),
+        );
       });
     }
 
