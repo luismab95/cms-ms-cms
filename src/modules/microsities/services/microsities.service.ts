@@ -14,7 +14,7 @@ import {
   UpdateMicrosityDto,
 } from '../dto/microsity.dto.js';
 import { PageMongoI, CreatePageDto } from '@modules/pages/dto/page.dto.js';
-import { createPage } from '@shared/helpers/page.helper.js';
+import { createPage, defaultPageBody } from '@shared/helpers/page.helper.js';
 import { PermissionSitieI } from '@shared/interfaces/permission-sitie.interface.js';
 import { PermissionSitieRepository } from '@shared/repositories/permission-sitie.repository.js';
 import { ParameterRepository } from '@shared/repositories/parameter.repository.js';
@@ -49,15 +49,7 @@ export class MicrositiesService {
       await this.permissionSitieRepository.create(assignUser, cnx);
 
       const createdPage = new this.pageModel({
-        data: {
-          body: {
-            css: '.body{\n display: block;\n  width: 100%;\n  height: auto;\n  min-height: 600px;\n  padding-top: 10px;\n  padding-right: 10px;\n  padding-bottom: 10px;\n  padding-left: 10px;\n}',
-            config: {
-              backgroundImage: '',
-            },
-            data: [],
-          },
-        },
+        data: defaultPageBody,
       });
       const pageData = await createdPage.save();
       const createPageDto = {

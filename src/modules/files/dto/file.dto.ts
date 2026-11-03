@@ -43,9 +43,9 @@ export class UpdateFileDto {
     message: 'Descripción solo permite un máximo de 255 caracteres',
   })
   description: string;
-
-  @IsOptional()
-  status: boolean;
+  @IsString({ message: 'Nombre debe ser texto' })
+  @IsNotEmpty({ message: 'Nombre es requerido' })
+  name: string;
 }
 
 export interface FileI {

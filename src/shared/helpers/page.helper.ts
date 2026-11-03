@@ -6,6 +6,7 @@ import {
   CreatePageDto,
   ElementDataI,
   PageBodyI,
+  PageDataMongoI,
 } from '@modules/pages/dto/page.dto.js';
 import { SitieRepository } from '@modules/sitie/repositories/sitie.repository.js';
 import { TemplateNestedObjectI } from '@modules/templates/dto/template.dto.js';
@@ -14,7 +15,7 @@ import {
   ReferenceI,
   ReferenceReviewI,
 } from '@shared/interfaces/reference.interface.js';
-import { ColumnI, ElementI } from '@shared/interfaces/page.interface.js';
+import { ElementI } from '@shared/interfaces/page.interface.js';
 
 export async function createPage(
   createPageDto: CreatePageDto,
@@ -240,3 +241,13 @@ async function createOrUpdateRef(
 
   return element;
 }
+
+export const defaultPageBody: PageDataMongoI = {
+  body: {
+    css: '.body {  display: flex;  width: 100%; height: auto;  min-height: 80vh; flex-direction: column;  justify-content: center;  padding-top: 10px;  padding-right: 10px;  padding-bottom: 10px;  padding-left: 10px; background-color: #ffffff;  }',
+    config: {
+      backgroundImage: '',
+    },
+    data: [],
+  },
+};

@@ -35,14 +35,22 @@ export class PublicController {
   @UsePipes(new ValidationPipe())
   async getPage(
     @Query() GetallDto: GetPageParamsDto,
-  ): Promise<ServiceResponseI<any | string>> {
+  ): Promise<ServiceResponseI<string>> {
     const sitie = await this.sitieService.findOne();
-    if (!sitie || sitie.maintenance) {
+    if (!sitie)
+      throw new HttpException(
+        'No se encontro información del sitio',
+        HttpStatus.NOT_FOUND,
+      );
+
+    if (!sitie.status)
+      throw new HttpException('Sitio inactivo', HttpStatus.NOT_FOUND);
+
+    if (sitie.maintenance)
       throw new HttpException(
         'Sitio en mantenimiento',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
-    }
 
     let template = null;
 
@@ -52,12 +60,15 @@ export class PublicController {
         GetallDto.micrositie,
         'path',
       );
-      if (!micrositie || !micrositie.status) {
+      if (!micrositie)
         throw new HttpException(
-          'Sitio en mantenimiento',
-          HttpStatus.SERVICE_UNAVAILABLE,
+          'No se encontro información del micrositio',
+          HttpStatus.NOT_FOUND,
         );
-      }
+
+      if (!micrositie.status)
+        throw new HttpException('Micrositie inactivo', HttpStatus.NOT_FOUND);
+
       micrositieId = micrositie.id!;
       template = await this.templatesService.getTemplate(
         GetallDto.lang,

@@ -125,11 +125,11 @@ export class TemplateRepository {
       ])
       .from(Template, 't');
 
-    query = query.innerJoin(
+    query.innerJoin(
       PermissionSitie,
       'pm',
-      'pm.sitie_id IS NOT NULL AND pm.status = :status AND pm.user_id = :userId',
-      { userId, status: true },
+      'pm.sitie_id IS NOT NULL AND pm.status = :statusPm AND pm.user_id = :userId',
+      { userId, statusPm: true },
     );
 
     query = queryFilter(

@@ -147,18 +147,18 @@ export class PageRepository {
       .from(Page, 'p');
 
     if (paginationRequest.micrositieId === undefined) {
-      query = query.innerJoin(
+      query.innerJoin(
         PermissionSitie,
         'ps',
-        'ps.sitie_id = p.sitie_id and ps.user_id = :userId and ps.status = :status',
-        { userId, status: true },
+        'ps.sitie_id = p.sitie_id and ps.user_id = :userId and ps.status = :statusPs',
+        { userId, statusPs: true },
       );
     } else {
-      query = query.innerJoin(
+      query.innerJoin(
         PermissionSitie,
         'pm',
-        'pm.micrositie_id = p.micrositie_id and pm.user_id = :userId and pm.status = :status',
-        { userId, status: true },
+        'pm.micrositie_id = p.micrositie_id and pm.user_id = :userId and pm.status = :statusPm',
+        { userId, statusPm: true },
       );
     }
 
