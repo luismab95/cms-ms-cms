@@ -138,12 +138,8 @@ export class PageReviewRepository {
         `CONCAT(ur.firstname, ' ', ur.lastname) AS "userReview"`,
       ])
       .from(PageReview, 'pr')
-      .leftJoin(Page, 'p', 'pr.page_id = p.id and p.status = :status', {
-        status: true,
-      })
-      .leftJoin(Template, 't', 'pr.template_id = t.id and t.status = :status', {
-        status: true,
-      })
+      .leftJoin(Page, 'p', 'pr.page_id = p.id')
+      .leftJoin(Template, 't', 'pr.template_id = t.id')
       .innerJoin(User, 'uc', 'uc.id = pr.user_changes_id')
       .innerJoin(
         PermissionSitie,
